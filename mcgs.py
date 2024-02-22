@@ -1,4 +1,4 @@
-"""
+"""s
 Description
 -----------
 This is a core module of UPXO making use of Monte-Carlo (MC) simulation of
