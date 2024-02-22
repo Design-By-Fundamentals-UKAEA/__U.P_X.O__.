@@ -27,7 +27,7 @@ We should be able to post-process the following from UPXO:
 Object oriented.
 ## Dependencies
 The major dependencies of UPXO are: Numpy, Scipy, gmsh, PyVista, vedo, Shapely, VTK, Scikit-Image, OpenCV, Pandas, Matplotlib, Seaborn, numba
-
+The minor dependencies
 
 
 # Finite element export details
