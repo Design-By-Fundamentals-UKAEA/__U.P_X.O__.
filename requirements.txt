@@ -1,0 +1,2 @@
+Numpy, Scipy, gmsh, PyVista, vedo, Shapely, VTK, Scikit-Image, OpenCV, Pandas, Matplotlib, Seaborn, numba.
+For more details refer readme section Dependencies.
