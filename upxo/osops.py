@@ -1,79 +1,103 @@
-# from polycrystal import pxtal
-#------------------------------------------------------------------
-"""
-GENERAL INFORMATION
+import os
+# import shutil
+import pandas as pd
+# import h5py
+# import csv
+# import openpyxl
 
-This module has the following classes:
-    1. compatibility
-    2. folder
-    3. file
-    4. rw
-"""
-def get_pythnEnvName():
-    import os
-    import sys
+def error_handler(func):
+    """Decorator to handle exceptions and log file operations."""
+    def wrapper(*args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+            print(f"Operation '{func.__name__}' completed successfully.")
+            return result
+        except FileNotFoundError as e:
+            print(f"Error: {e}. File or directory not found in '{func.__name__}'.")
+        except Exception as e:
+            print(f"An unexpected error occurred in '{func.__name__}': {e}")
+    return wrapper
 
-    env_path = sys.prefix
-    env_name = os.path.basename(env_path)  # Gets the last part of the path, which is typically the environment name
+def data_importer(func):
+    """Decorator to abstract the data importing functionality."""
+    @error_handler  # Use the error handling decorator
+    def wrapper(file_path, *args, **kwargs):
+        print(f"Importing data from {file_path}")
+        return func(file_path, *args, **kwargs)
+    return wrapper
 
-    print(f"Current environment path: {env_path}")
-    print(f"Current environment name: {env_name}")
+def data_exporter(func):
+    """Decorator to abstract the data exporting functionality."""
+    @error_handler  # Use the error handling decorator
+    def wrapper(data, file_path, *args, **kwargs):
+        print(f"Exporting data to {file_path}")
+        func(data, file_path, *args, **kwargs)
+        print("Data export completed successfully.")
+    return wrapper
 
-#00000000000000000000000000000000000000000000000000000000000000000000000000000
-class compatibility():
-    def __init__(self):
-        pass
-#00000000000000000000000000000000000000000000000000000000000000000000000000000
-class folder():
-    def __init__(self):
-        pass
-    def make(self):
-        pass
-    def delete(self):
-        pass
-    def move(self):
-        pass
-    def exist(self):
-        pass
-#000000000000000000000000000000000000000000000000000000000000000000000000000000
-class file():
-    def __init__(self):
-        pass
-    def make(self):
-        pass
-    def delete(self):
-        pass
-    def move(self):
-        pass
-    def exist(self):
-        pass
-#000000000000000000000000000000000000000000000000000000000000000000000000000000
-class rw():
-    def __init__(self):
-        pass
-    #------------------------------------------------------------------
-    def w_par(self, **kwargs):
-        # Write pxtal parameters to file as directed
-        pass
-    #------------------------------------------------------------------
-    def w_xyz(self, **kwargs):
-        # Write co-ordinate data to file as directed
-        pass
-    #------------------------------------------------------------------
-    def r_par(self, **kwargs):
-        # Read pxtal parameters from file as directed
-        pass
-    #------------------------------------------------------------------
-    def r_xyz(self, **kwargs):
-        # Read co-ordinate data from file as directed
-        pass
-    #------------------------------------------------------------------
-    def w_id(self, **kwargs):
-        # Write ID data to file as directed
-        pass
-    #------------------------------------------------------------------
-    def w_field(self, **kwargs):
-        # Write field data to file as directed
-        pass
-    #------------------------------------------------------------------
-#000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+class FileManager:
+    @error_handler
+    def create_folder(self, path):
+        """Create a new folder at the specified path."""
+        if not os.path.exists(path):
+            os.makedirs(path)
+            print(f"Folder created at: {path}")
+        else:
+            print(f"Folder already exists at: {path}")
+
+    @error_handler
+    def delete_folder(self, path):
+        """Delete the folder at the specified path."""
+        if os.path.exists(path) and os.path.isdir(path):
+            os.rmdir(path)
+            print(f"Folder deleted at: {path}")
+        else:
+            print(f"Folder does not exist at: {path}")
+
+    @error_handler
+    def list_folder_contents(self, path):
+        """List the contents of the folder at the specified path."""
+        if os.path.exists(path) and os.path.isdir(path):
+            return os.listdir(path)
+        else:
+            print(f"Path does not exist or is not a directory: {path}")
+
+    @error_handler
+    def write_to_file(self, file_path, data):
+        """Write data to a file."""
+        with open(file_path, 'w') as file:
+            file.write(data)
+            print(f"Data written to file: {file_path}")
+
+    @error_handler
+    def read_from_file(self, file_path):
+        """Read data from a file."""
+        with open(file_path, 'r') as file:
+            return file.read()
+
+    @data_importer
+    def import_txt(self, file_path):
+        """Import data from a TXT file."""
+        with open(file_path, 'r') as file:
+            data = file.read()
+        return data
+
+    @data_importer
+    def import_csv(self, file_path):
+        """Import data from a CSV file."""
+        return pd.read_csv(file_path)
+
+    @data_exporter
+    def export_csv(self, data, file_path):
+        """Export data to a CSV file."""
+        data.to_csv(file_path, index=False)
+
+# Example Usage
+file_manager = FileManager()
+file_manager.create_folder('new_folder')
+file_manager.delete_folder('new_folder')
+contents = file_manager.list_folder_contents('.')
+file_manager.write_to_file('example.txt', 'Hello, FileManager!')
+data = file_manager.read_from_file('example.txt')
+print(data)

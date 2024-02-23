@@ -19,7 +19,7 @@ Circulation restricted to the following until official release:
 -------------------------------------------------------------------
 GENERAL INFORMATION
 
-1. Large simulation domain:
+1. Large simulation domain: 
     Number of pixels in lattice >= 1E4
     Number of pixels in lattice * Total MC time >= 1E7
 """
