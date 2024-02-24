@@ -1,0 +1,41 @@
+_export
+    data exports to various formats
+******************************
+_sup
+    dataTypeHandlers
+******************************
+algorithms
+    - houses all algorithms (python files only)
+******************************
+geoEntities
+    fundamental geometric entities and related opertations
+******************************
+interfaces
+    interfacing codes for abaqus, c, damask, dream3d, moose, os
+    user input excel files
+    auto generated reports
+******************************
+material
+    material related codes
+******************************
+meshing
+    fe meshing codes
+******************************
+pxtal
+    core codes for generating grain structures
+******************************
+repqual
+    Codes for representativeness qualification
+******************************
+statops
+    Codes for mundane statistical operations
+******************************
+upxinstanciations
+    codes to develop high level upxo heirarhical grain structutre instances
+******************************
+vis
+    visualization package
+******************************
+xtalphy
+    crystallography
+******************************
