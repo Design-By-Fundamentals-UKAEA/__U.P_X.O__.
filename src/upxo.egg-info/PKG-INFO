@@ -3,11 +3,13 @@ Name: upxo
 Version: 1.26.1
 Summary: A package for grain structure generation, analysis, and export to FE simulation software
 Home-page: https://github.com/SunilAnandatheertha/upxo_private/
-Download-URL: https://github.com/SunilAnandatheertha/upxo_private/
 Author: Dr. Sunil Anandatheertha
 Author-email: sunilanandatheertha@gmail.com
+License: UNKNOWN
+Download-URL: https://github.com/SunilAnandatheertha/upxo_private/
 Project-URL: Source Code, https://github.com/SunilAnandatheertha/upxo_private/tree/upxo.v.1.26.1/src
 Project-URL: Documentation, https://github.com/SunilAnandatheertha/upxo_private/tree/upxo.v.1.26.1/docs
+Platform: UNKNOWN
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Computational Materials Science/Research
 Classifier: Intended Audience :: Crystal plasticity based finite element method
@@ -79,3 +81,5 @@ To do
 5. Available in 2D: Generation, analysis, meshing, export
 6. Available in 3D: None
 7. Available in 2D: Generation, analysis, meshing, export
+
+

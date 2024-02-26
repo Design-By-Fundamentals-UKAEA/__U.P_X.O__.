@@ -56,12 +56,12 @@ class point2d():
     """
     Decisions - point2d class
     1. ROUND_ZERO_DEC_PLACE - DONE. removed
-    2. EPS_above - DONE. removed
-    3. EPS_below - DONE. removed
-    4. EPS_left - DONE. removed
-    5. EPS_right - DONE. removed
-    6. EPS_divisor - DONE. removed
-    7. EPS_rotate - DONE. removed
+    2. EPSILON_above - DONE. removed
+    3. EPSILON_below - DONE. removed
+    4. EPSILON_left - DONE. removed
+    5. EPSILON_right - DONE. removed
+    6. EPSILON_divisor - DONE. removed
+    7. EPSILON_rotate - DONE. removed
     8. angle - DONE. removed
     9. angles - DONE. removed
     10. Put [loc, ptype, jn, phase_id, phase_name, tcname] inside a "state" dictionary - DONE.
@@ -74,7 +74,7 @@ class point2d():
     17. Move pixellation method to a new pops module
     18. Remove dim - DONE. removed
     """
-    EPS = 0.000000000001
+    EPSILON = 1e-12
     __slots__ = ('lean',  # Complexity branching
                  'mid',  # memory id of the point
                  'x', 'y',  # x and y - coordinates
@@ -89,7 +89,7 @@ class point2d():
                  x: float = 0.0,
                  y: float = 0.0,
                  lean: str = 'ignore',
-                 tdist: float = 0.0000000000001,
+                 tdist: float = 1e-12,
                  dim: int = 2,
                  ptype: str = 'vt2dseed',
                  jn: int = 3,

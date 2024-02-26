@@ -10,6 +10,7 @@ src/upxo/_sup/ODDict.py
 src/upxo/_sup/__init__.py
 src/upxo/_sup/dataTypeHandlers.py
 src/upxo/_sup/gops.py
+src/upxo/_sup/stop_watch.py
 src/upxo/_sup/upxo_math.py
 src/upxo/algorithms/__init__.py
 src/upxo/geoEntities/__init__.py
@@ -30,6 +31,7 @@ src/upxo/interfaces/dream3d/__init__.py
 src/upxo/interfaces/moose/__init__.py
 src/upxo/interfaces/os/__init__.py
 src/upxo/interfaces/os/osops.py
+src/upxo/interfaces/os/package_check.py
 src/upxo/interfaces/os/pck_mgmt.py
 src/upxo/interfaces/report/__init__.py
 src/upxo/interfaces/report/pwpops.py
