@@ -1,4 +1,4 @@
-"""s
+"""
 Description
 -----------
 This is a core module of UPXO making use of Monte-Carlo (MC) simulation of
@@ -23,22 +23,21 @@ GENERAL INFORMATION
     Number of pixels in lattice >= 1E4
     Number of pixels in lattice * Total MC time >= 1E7
 """
-import numpy.random as rand
+
 # import time
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+# import numpy.random as rand
 # import matplotlib.colors as colors
 # import matplotlib.ticker as ticker
-from random import sample as sample_rand
-from .._sup import gops
-# from ..interfaces.os import package_check as pkgChk
-from .._sup import dataTypeHandlers as dth
-from .._sup import stop_watch as sw
+# from random import sample as sample_rand
+# from .._sup import stop_watch as sw
 # import datatype_handlers as dth
 # import gops
-import os
+# import os
 # import re
-import math
+# import math
 import numpy as np
 from scipy.interpolate import griddata
 # import scipy.stats as stats
@@ -47,21 +46,16 @@ from skimage.measure import label as skim_label
 # from point2d import point2d
 # from mulpoint2d import mulpoint2d
 import xlrd
+from prettytable import PrettyTable
 import pandas as pd
 from termcolor import colored
-
-# from typing import Union
-# REFER: https://stackoverflow.com/questions/66055067/how-to-allow-multiple-types-of-arguments-in-function
-# Union could be used in type specifying arguments in case where multiple
-# types are allowed for an argument.
-
-
-from copy import deepcopy
-from prettytable import PrettyTable
 import seaborn as sns
-# import warnings, logging
 from scipy.signal import argrelextrema
 from scipy.signal import find_peaks
+
+from .._sup import gops
+# from ..interfaces.os import package_check as pkgChk
+from .._sup import dataTypeHandlers as dth
 from ..geoEntities import mulpoint2d
 __authors__ = ["Vaasu Anandatheertha"]
 __lead_developer__ = ["Vaasu Anandatheertha"]
