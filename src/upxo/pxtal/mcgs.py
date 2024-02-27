@@ -25,7 +25,7 @@ GENERAL INFORMATION
 """
 
 # import time
-from copy import deepcopy
+# from copy import deepcopy
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 # import numpy.random as rand
@@ -45,18 +45,18 @@ import cv2
 from skimage.measure import label as skim_label
 # from point2d import point2d
 # from mulpoint2d import mulpoint2d
-import xlrd
+# import xlrd
 from prettytable import PrettyTable
-import pandas as pd
-from termcolor import colored
-import seaborn as sns
-from scipy.signal import argrelextrema
-from scipy.signal import find_peaks
-
+# import pandas as pd
+# from termcolor import colored
+# import seaborn as sns
+# from scipy.signal import argrelextrema
+# from scipy.signal import find_peaks
+from upxo.interfaces.user_inputs.gather_user_inputs import load_uidata
 from .._sup import gops
 # from ..interfaces.os import package_check as pkgChk
 from .._sup import dataTypeHandlers as dth
-from ..geoEntities import mulpoint2d
+# from ..geoEntities import mulpoint2d
 __authors__ = ["Vaasu Anandatheertha"]
 __lead_developer__ = ["Vaasu Anandatheertha"]
 __emails__ = ["vaasu.anandatheertha@ukaea.uk", ]
@@ -136,7 +136,16 @@ class grid():
         self.study = study
         self.__info_message_display_level__ = 'detailed'
         if study == 'independent':
-            self.load_uidata(input_dashboard)
+            uidata_all = load_uidata(input_dashboard)
+            self.uigrid = uidata_all['uigrid']
+            self.uisim = uidata_all['uisim']
+            self.uigsc = uidata_all['uigsc']
+            self.uiint = uidata_all['uiint']
+            self.uigsprop = uidata_all['uigsprop']
+            self.uigeomrepr = uidata_all['uigeorep']
+            self.uimesh = uidata_all['uimesh']
+            self.__ui = uidata_all
+            
             self.initiate()
         elif study in ('para_sweep'):
             # Parameters to be manually set
@@ -213,11 +222,11 @@ class grid():
     def load_uidata(self, input_dashboard):
 
         # Load user input data
-        from ..interfaces.user_inputs.mcgsudata import _load_user_input_data_
+        import upxo.interfaces.user_inputs._uidata_mcgs_mesh_ as _load_user_input_data_
         self.__ui = _load_user_input_data_(xl_fname=input_dashboard)
 
         # Extract gridding parameters
-        from ..interfaces.user_inputs import _uidata_mcgs_gridding_definitions_
+        import upxo.interfaces.user_inputs._uidata_mcgs_gridding_definitions_ as _uidata_mcgs_gridding_definitions_
         self.uigrid = _uidata_mcgs_gridding_definitions_(self.__ui)
 
         # Exrtact simulation parametrs
