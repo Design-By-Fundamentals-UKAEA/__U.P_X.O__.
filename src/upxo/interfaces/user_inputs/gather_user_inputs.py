@@ -3,7 +3,7 @@ import os
 # Load user input data
 # import upxo.interfaces.user_inputs.mcgsudata as _load_user_input_data_
 # Extract gridding parameters
-import upxo.interfaces.user_inputs._uidata_mcgs_gridding_definitions_ as _uidata_mcgs_gridding_definitions_
+import upxo.interfaces.user_inputs.uidata_mcgs_gridding_definitions as uidata_mcgs_gridding_definitions
 # Exrtact simulation parametrs
 import upxo.interfaces.user_inputs._uidata_mcgs_simpar_ as _uidata_mcgs_simpar_
 # Extract parameters for grain structure analysis
@@ -46,6 +46,7 @@ def load_uidata(input_dashboard):
     """
     # Load user input data
     __ui = _load_user_input_data_(xl_fname=input_dashboard)
+    print(__ui)
 
     # Extract gridding parameters
     uigrid = _uidata_mcgs_gridding_definitions_(__ui)
