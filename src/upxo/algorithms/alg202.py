@@ -8,6 +8,9 @@ def run(uisim, uiint, uidata, uigrid,
         xgr, ygr, zgr, px_size,
         _a, _b, _c, S, AIA0, AIA1, display_messages):
     # ---------------------------------------------
+    print("Using SA's L0 modified Q-state Pott's model: ")
+    print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG202' + 15*'-' + '|')
+    gs = {}
     # Begin modified Markov-Chain annealing iterations
     fully_annealed = False
     for m in range(uisim.mcsteps):
@@ -64,34 +67,27 @@ def run(uisim, uiint, uidata, uigrid,
                         elif uisim.consider_boltzmann_probability:
                             if uisim.s_boltz_prob[int(ssub_11_b-1)] < rand.random():
                                 S[s0, s1] = ssub_11_b
-            print(Neigh)
-        if display_messages:
-            if m % uiint.mcint_promt_display == 0:
-                print("Temporal step no.", m)
         cond_1 = m % uiint.mcint_save_at_mcstep_interval == 0.0
-        if cond_1 or fully_annealed:
-            # Create and add grain structure data structure template
-            if m == 0:
-                gs = {m: GS2d(m=m,
-                              dim=uigrid.dim,
-                              uidata=uidata,
-                              px_size=px_size,
-                              S_total=uisim.S,
-                              xgr=xgr,
-                              ygr=ygr,
-                              uigrid=uigrid,
-                              )}
-            else:
-                gs[m] = GS2d(m=m,
-                             dim=uigrid.dim,
-                             uidata=uidata,
-                             px_size=px_size,
-                             S_total=uisim.S,
-                             xgr=xgr,
-                             ygr=ygr,
-                             uigrid=uigrid
-                             )
+        save_msg = False
+        if m==0 or cond_1 or fully_annealed:
+            gs[m] = GS2d(m=m,
+                         dim=uigrid.dim,
+                         uidata=uidata,
+                         px_size=px_size,
+                         S_total=uisim.S,
+                         xgr=xgr,
+                         ygr=ygr,
+                         uigrid=uigrid,
+                         )
             gs[m].s = deepcopy(S)
+            save_msg = True
             if display_messages:
-                print(f'State Updated @ mc step {m}')
+                print(f"GS temporal slice {m} stored")
+                print(30*'.')
+        if m % uiint.mcint_promt_display == 0:
+            if display_messages:
+                if not save_msg:
+                    print(f"Monte-Carlo temporal step = {m}")
+    print('|' + 15*'-'+' MC SIM RUN COMPLETED on: ALG202' + 15*'-' + '|')
+
     return gs, fully_annealed

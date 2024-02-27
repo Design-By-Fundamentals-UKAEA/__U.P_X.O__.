@@ -7,6 +7,9 @@ from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as GS2d
 def run(uisim, uiint, uidata, uigrid,
         xgr, ygr, zgr, px_size,
         _a, _b, _c, S, AIA0, AIA1, display_messages):
+    print("Using ALG-200gen: SA's NL-1 weighted Q-Pott's model:")
+    print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG200gen' + 15*'-' + '|')
+    gs = {}
     # Build the Non-Locality Matrix
     NLM_00, NLM_01, NLM_02 = _a  # Unpack 3 colms of 1st row
     NLM_10, NLM_11, NLM_12 = _b  # Unpack 3 colms of 2nd row
@@ -65,33 +68,27 @@ def run(uisim, uiint, uidata, uigrid,
                         elif uisim.consider_boltzmann_probability:
                             if uisim.s_boltz_prob[int(ssub_11_b-1)] < rand.random():
                                 S[s0, s1] = ssub_11_b
-        if display_messages:
-            if m % uiint.mcint_promt_display == 0:
-                print("Temporal step no.", m)
         cond_1 = m % uiint.mcint_save_at_mcstep_interval == 0.0
-        if cond_1 or fully_annealed:
-            # Create and add grain structure data structure template
-            if m == 0:
-                gs = {m: GS2d(m=m,
-                              dim=uigrid.dim,
-                              uidata=uidata,
-                              px_size=px_size,
-                              S_total=uisim.S,
-                              xgr=xgr,
-                              ygr=ygr,
-                              uigrid=uigrid,
-                              )}
-            else:
-                gs[m] = GS2d(m=m,
-                             dim=uigrid.dim,
-                             uidata=uidata,
-                             px_size=px_size,
-                             S_total=uisim.S,
-                             xgr=xgr,
-                             ygr=ygr,
-                             uigrid=uigrid
-                             )
+        save_msg = False
+        if m==0 or cond_1 or fully_annealed:
+            gs[m] = GS2d(m=m,
+                         dim=uigrid.dim,
+                         uidata=uidata,
+                         px_size=px_size,
+                         S_total=uisim.S,
+                         xgr=xgr,
+                         ygr=ygr,
+                         uigrid=uigrid,
+                         )
             gs[m].s = deepcopy(S)
+            save_msg = True
             if display_messages:
-                print(f'State Updated @ mc step {m}')
+                print(f"GS temporal slice {m} stored")
+                print(30*'.')
+        if m % uiint.mcint_promt_display == 0:
+            if display_messages:
+                if not save_msg:
+                    print(f"Monte-Carlo temporal step = {m}")
+    print('|' + 15*'-'+' MC SIM RUN COMPLETED on: ALG200gen' + 15*'-' + '|')
+
     return gs, fully_annealed

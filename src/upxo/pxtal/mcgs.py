@@ -1928,29 +1928,25 @@ class monte_carlo_grain_structure(grid):
     def start_algo2d_without_hops(self):
         _a, _b, _c = self.build_NLM()  # Unpack 3 rows of NLM
         if self.uisim.mcalg == '200':
-            print('I AM IN HERE -- 2')
-            print("Using ALG-200: SA's SL NL-1 TP1 C2 unweighted Q-Pott's model:")
             import upxo.algorithms.alg200 as alg200
-            gs, fully_annealed = alg200.run(self.uisim, self.uiint,
+            self.gs, fully_annealed = alg200.run(self.uisim, self.uiint,
                                             self.uidata_all, self.uigrid,
                                             self.xgr, self.ygr, self.zgr,
                                             self.px_size, _a, _b, _c,
                                             self.S, self.AIA0, self.AIA1,
                                             self.display_messages)
         elif self.uisim.mcalg == '201':
-            print("Using ALG-200: SA's NL-1 weighted Q-Pott's model:")
             import upxo.algorithms.alg201 as alg201
-            gs, fully_annealed = alg201.run(self.uisim, self.uiint,
+            self.gs, fully_annealed = alg201.run(self.uisim, self.uiint,
                                             self.uidata_all, self.uigrid,
                                             self.xgr, self.ygr, self.zgr,
                                             self.px_size, _a, _b, _c,
                                             self.S, self.AIA0, self.AIA1,
                                             self.display_messages)
         elif self.uisim.mcalg == '202':
-            print("Using SA's L0 modified Q-state Pott's model: ")
-            print("    weighted (: ALG-200)")
-            import upxo.algorithms.alg201 as alg201
-            gs, fully_annealed = alg201.run(self.uisim, self.uiint,
+            print("    weighted (: ALG-202)")
+            import upxo.algorithms.alg202 as alg202
+            self.gs, fully_annealed = alg202.run(self.uisim, self.uiint,
                                             self.uidata_all, self.uigrid,
                                             self.xgr, self.ygr, self.zgr,
                                             self.px_size, _a, _b, _c,
