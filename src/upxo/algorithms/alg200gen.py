@@ -1,7 +1,8 @@
 from copy import deepcopy
 from random import sample as sample_rand
 import numpy.random as rand
-from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as grain_structure
+from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as GS2d
+
 
 def run(uisim, uiint, uidata, uigrid,
         xgr, ygr, zgr, px_size,
@@ -71,25 +72,25 @@ def run(uisim, uiint, uidata, uigrid,
         if cond_1 or fully_annealed:
             # Create and add grain structure data structure template
             if m == 0:
-                gs = {m: grain_structure(m=m,
-                                         dim=uigrid.dim,
-                                         uidata=uidata,
-                                         px_size=px_size,
-                                         S_total=uisim.S,
-                                         xgr=xgr,
-                                         ygr=ygr,
-                                         uigrid=uigrid,
-                                         )}
+                gs = {m: GS2d(m=m,
+                              dim=uigrid.dim,
+                              uidata=uidata,
+                              px_size=px_size,
+                              S_total=uisim.S,
+                              xgr=xgr,
+                              ygr=ygr,
+                              uigrid=uigrid,
+                              )}
             else:
-                gs[m] = grain_structure(m=m,
-                                        dim=uigrid.dim,
-                                        uidata=uidata,
-                                        px_size=px_size,
-                                        S_total=uisim.S,
-                                        xgr=xgr,
-                                        ygr=ygr,
-                                        uigrid=uigrid
-                                        )
+                gs[m] = GS2d(m=m,
+                             dim=uigrid.dim,
+                             uidata=uidata,
+                             px_size=px_size,
+                             S_total=uisim.S,
+                             xgr=xgr,
+                             ygr=ygr,
+                             uigrid=uigrid
+                             )
             gs[m].s = deepcopy(S)
             if display_messages:
                 print(f'State Updated @ mc step {m}')

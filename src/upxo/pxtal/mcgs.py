@@ -1930,7 +1930,6 @@ class monte_carlo_grain_structure(grid):
         if self.uisim.mcalg == '200':
             print('I AM IN HERE -- 2')
             print("Using ALG-200: SA's SL NL-1 TP1 C2 unweighted Q-Pott's model:")
-            print('////////////////////////////////')
             import upxo.algorithms.alg200 as alg200
             gs, fully_annealed = alg200.run(self.uisim, self.uiint,
                                             self.uidata_all, self.uigrid,
@@ -1938,11 +1937,8 @@ class monte_carlo_grain_structure(grid):
                                             self.px_size, _a, _b, _c,
                                             self.S, self.AIA0, self.AIA1,
                                             self.display_messages)
-            print(gs)
-            print(fully_annealed)
         elif self.uisim.mcalg == '201':
             print("Using ALG-200: SA's NL-1 weighted Q-Pott's model:")
-            print('////////////////////////////////')
             import upxo.algorithms.alg201 as alg201
             gs, fully_annealed = alg201.run(self.uisim, self.uiint,
                                             self.uidata_all, self.uigrid,
@@ -1950,14 +1946,16 @@ class monte_carlo_grain_structure(grid):
                                             self.px_size, _a, _b, _c,
                                             self.S, self.AIA0, self.AIA1,
                                             self.display_messages)
-            print(gs)
-            print(fully_annealed)
-            # self.mc_iterations_2d_alg201()
-        elif self.uisim.mcalg == '201':
+        elif self.uisim.mcalg == '202':
             print("Using SA's L0 modified Q-state Pott's model: ")
             print("    weighted (: ALG-200)")
-            print('////////////////////////////////')
-            self.mc_iterations_2d_alg202()
+            import upxo.algorithms.alg201 as alg201
+            gs, fully_annealed = alg201.run(self.uisim, self.uiint,
+                                            self.uidata_all, self.uigrid,
+                                            self.xgr, self.ygr, self.zgr,
+                                            self.px_size, _a, _b, _c,
+                                            self.S, self.AIA0, self.AIA1,
+                                            self.display_messages)
 
     def start_algo2d_with_hops(self):
         pass
