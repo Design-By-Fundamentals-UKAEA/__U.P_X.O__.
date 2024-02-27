@@ -1,3 +1,5 @@
+import numpy as np
+from termcolor import colored
 
 class _uidata_mcgs_gridding_definitions_:
     """

@@ -1,3 +1,6 @@
+import numpy as np
+from termcolor import colored
+
 class artwork():
     """
     TO BE DEPRECATED

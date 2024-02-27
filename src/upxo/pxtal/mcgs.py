@@ -53,9 +53,9 @@ from prettytable import PrettyTable
 # from scipy.signal import argrelextrema
 # from scipy.signal import find_peaks
 from upxo.interfaces.user_inputs.gather_user_inputs import load_uidata
-from .._sup import gops
+from upxo._sup import gops
 # from ..interfaces.os import package_check as pkgChk
-from .._sup import dataTypeHandlers as dth
+from upxo._sup import dataTypeHandlers as dth
 # from ..geoEntities import mulpoint2d
 __authors__ = ["Vaasu Anandatheertha"]
 __lead_developer__ = ["Vaasu Anandatheertha"]
@@ -118,7 +118,8 @@ class grid():
         NLM: np.ndarray: Non-locality matrix
     """
     __slots__ = ('uigrid', 'uisim', 'uigsc', 'uiint', 'study',
-                 'uigsprop', 'uimesh', 'uigeomrepr' '_mcsteps_', 'index',
+                 'uigsprop', 'uimesh', 'uigeomrepr' '_mcsteps_',
+                 'uidata_all', 'index',
                  '__ui', '__g__', '__gprop__', '__gb__', '__gbprop__',
                  'gs', 'xgr', 'ygr', 'zgr',
                  'NL_dict', 'px_length', 'px_size',
@@ -145,7 +146,8 @@ class grid():
             self.uigeomrepr = uidata_all['uigeorep']
             self.uimesh = uidata_all['uimesh']
             self.__ui = uidata_all
-            
+            self.uidata_all = uidata_all
+
             self.initiate()
         elif study in ('para_sweep'):
             # Parameters to be manually set
@@ -184,6 +186,7 @@ class grid():
         self.__info_message_display_level__ = 'detailed'
 
     def __repr__(self):
+        self.__info_message_display_level__ = 'detailed'
         if self.__info_message_display_level__ == 'simple':
             if self.uigrid.dim == 2:
                 return 'UPXO 2D.MCGS\n'
@@ -218,40 +221,6 @@ class grid():
                 MESHPAR += 'Mesh parameters not set yet.\n'
         # --------------------------------------
             return sep1 + GRID + SIMPAR + MESHPAR + '\n' + '-'*60
-
-    def load_uidata(self, input_dashboard):
-
-        # Load user input data
-        import upxo.interfaces.user_inputs._uidata_mcgs_mesh_ as _load_user_input_data_
-        self.__ui = _load_user_input_data_(xl_fname=input_dashboard)
-
-        # Extract gridding parameters
-        import upxo.interfaces.user_inputs._uidata_mcgs_gridding_definitions_ as _uidata_mcgs_gridding_definitions_
-        self.uigrid = _uidata_mcgs_gridding_definitions_(self.__ui)
-
-        # Exrtact simulation parametrs
-        from ..interfaces.user_inputs import _uidata_mcgs_simpar_
-        self.uisim = _uidata_mcgs_simpar_(self.__ui)
-
-        # Extract parameters for grain structure analysis
-        from ..interfaces.user_inputs import _uidata_mcgs_grain_structure_characterisation_
-        self.uigsc = _uidata_mcgs_grain_structure_characterisation_(self.__ui)
-
-        # Extract interval counts which trigger speciric operations
-        from ..interfaces.user_inputs import _uidata_mcgs_intervals_
-        self.uiint = _uidata_mcgs_intervals_(self.__ui)
-
-        # Extract grain structrue property calculation parameters (bools)
-        from ..interfaces.user_inputs import _uidata_mcgs_property_calc_
-        self.uigsprop = _uidata_mcgs_property_calc_(self.__ui)
-
-        # Extract grain geometric representation flags
-        from ..interfaces.user_inputs import _uidata_mcgs_generate_geom_reprs_
-        self.uigeorep = _uidata_mcgs_generate_geom_reprs_(self.__ui)
-
-        # Extract the user input data on meshing
-        from ..interfaces.user_inputs import _uidata_mcgs_mesh_
-        self.uimesh = _uidata_mcgs_mesh_(self.__ui)
 
     def set_uigrid(self,
                    domain_size=None,
@@ -709,7 +678,7 @@ class grid():
                             NLM_bw = ones + arts*np.array([[+0.0, +1., +0.0],
                                                            [+0.0, +0., +0.0],
                                                            [+0.0, +1., +0.0]])
-                    elif self.mcpar.NL == 2:
+                    elif self.uisim.NL == 2:
                         NLM_bw = ones+arts*np.array([[+1., +1., +1., +1., +1.],
                                                      [+1., +1., +1., +1., +1.],
                                                      [+1., +1., +1., +1., +1.],
@@ -718,7 +687,7 @@ class grid():
                                                      ])
                     else:
                         None
-            elif self.mcpar.kineticity == "kinetic":
+            elif self.uisim.kineticity == "kinetic":
                 None
             return NLM_bw
         else:
@@ -1096,7 +1065,8 @@ class grid():
                                        dim=None,
                                        study='independent'
                                        ):
-        from mcgs import grain_structure
+
+        from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as grain_structure
         if study == 'independent':
             if m == 0:
                 self.gs = {m: grain_structure(m=m,
@@ -1223,7 +1193,7 @@ class grid():
         """
 
         if self.uisim.s_boltz_prob == 'q_unrelated':
-            _a_ = np.random.random(size=self.mcpar_core.S)
+            _a_ = np.random.random(size=self.simpar.S)
             kbf = self.uisim.boltzmann_temp_factor_max
             self.uisim.s_boltz_prob = np.exp(-kbf*_a_)
         elif self.uisim.s_boltz_prob == 'q_related':
@@ -1930,6 +1900,7 @@ class monte_carlo_grain_structure(grid):
         return gops.att(self)
 
     def simulate(self):
+        self.algo_hop = False
         # Initiate the grain-structure data-structure
         self.add_gs_data_structure_template(m=0,
                                             dim=self.uigrid.dim,
@@ -1937,6 +1908,7 @@ class monte_carlo_grain_structure(grid):
                                             )
         # START THE MONTE-CARLO SIMULATIONS
         if self.uigrid.dim == 2 and len(self.uisim.algo_hops) == 1:
+            print('I AM IN HERE -- 1')
             self.algo_hop = False
             self.start_algo2d_without_hops()
         elif self.uigrid.dim == 2 and len(self.uisim.algo_hops) > 1:
@@ -1946,7 +1918,6 @@ class monte_carlo_grain_structure(grid):
                 self.start_algo2d_without_hops()
         elif self.uigrid.dim == 3 and len(self.uisim.algo_hops) == 1:
             self.algo_hop = False
-            print('I AM IN HERE -- 1')
             self.start_algo3d_without_hops()
         elif self.uigrid.dim == 3 and len(self.uisim.algo_hops) > 1:
             if self.algo_hop:
@@ -1955,14 +1926,33 @@ class monte_carlo_grain_structure(grid):
                 self.start_algo3d_without_hops()
 
     def start_algo2d_without_hops(self):
+        _a, _b, _c = self.build_NLM()  # Unpack 3 rows of NLM
         if self.uisim.mcalg == '200':
+            print('I AM IN HERE -- 2')
             print("Using ALG-200: SA's SL NL-1 TP1 C2 unweighted Q-Pott's model:")
             print('////////////////////////////////')
-            self.mc_iterations_2d_alg200()
+            import upxo.algorithms.alg200 as alg200
+            gs, fully_annealed = alg200.run(self.uisim, self.uiint,
+                                            self.uidata_all, self.uigrid,
+                                            self.xgr, self.ygr, self.zgr,
+                                            self.px_size, _a, _b, _c,
+                                            self.S, self.AIA0, self.AIA1,
+                                            self.display_messages)
+            print(gs)
+            print(fully_annealed)
         elif self.uisim.mcalg == '201':
             print("Using ALG-200: SA's NL-1 weighted Q-Pott's model:")
             print('////////////////////////////////')
-            self.mc_iterations_2d_alg201()
+            import upxo.algorithms.alg201 as alg201
+            gs, fully_annealed = alg201.run(self.uisim, self.uiint,
+                                            self.uidata_all, self.uigrid,
+                                            self.xgr, self.ygr, self.zgr,
+                                            self.px_size, _a, _b, _c,
+                                            self.S, self.AIA0, self.AIA1,
+                                            self.display_messages)
+            print(gs)
+            print(fully_annealed)
+            # self.mc_iterations_2d_alg201()
         elif self.uisim.mcalg == '201':
             print("Using SA's L0 modified Q-state Pott's model: ")
             print("    weighted (: ALG-200)")
@@ -2115,4 +2105,3 @@ class monte_carlo_grain_structure(grid):
         NLM_10, NLM_11, NLM_12 = _b  # Unpack 3 colms of 2nd row
         NLM_20, NLM_21, NLM_22 = _c  # Unpack 3 colms of 3rd row
         return NLM_00, NLM_01, NLM_02, NLM_10, NLM_11, NLM_12, NLM_20, NLM_21, NLM_22
-

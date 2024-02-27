@@ -61,6 +61,6 @@ class _uidata_mcgs_property_calc_:
         retstr += f"{colored('COMPUTE_GB_LENGTH_POL', 'red')}: {colored(self.compute_gb_length_pol, 'green')}\n"
         retstr += f"{colored('COMPUTE_GB_LENGTH_PXL', 'red')}: {colored(self.compute_gb_length_pxl, 'green')}\n"
         retstr += f"{colored('COMPUTE_GRAIN_MOMENTS', 'red')}: {colored(self.compute_grain_moments, 'green')}\n"
-        retstr += f"{colored('COMPUTE_GRAIN_CENTROIDS', 'red')}: {colored(self.compute_grain_centroids, 'green')}\n"
-        retstr += f"{colored('CREATE_GRAIN_BOUNDARY_ZONE', 'red')}: {colored(self.create_grain_boundary_zone, 'green')}\n"
+        #retstr += f"{colored('COMPUTE_GRAIN_CENTROIDS', 'red')}: {colored(self.compute_grain_centroids, 'green')}\n"
+        #retstr += f"{colored('CREATE_GRAIN_BOUNDARY_ZONE', 'red')}: {colored(self.create_grain_boundary_zone, 'green')}\n"
         return retstr

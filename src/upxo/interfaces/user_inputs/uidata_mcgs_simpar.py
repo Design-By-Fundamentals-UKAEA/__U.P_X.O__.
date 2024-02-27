@@ -1,3 +1,4 @@
+from termcolor import colored
 class _uidata_mcgs_simpar_:
     """
     Class to port user inputs on simulation parameters into UPXO.
@@ -127,6 +128,7 @@ class _uidata_mcgs_simpar_:
         PRINT_algo_hops = lambda: print(self.algo_hops) if self.DEV else None
         PRINT_mcsteps_lock = lambda: print(mcsteps_lock) if self.DEV else None
         # --------------------------------------------------
+        print('Algo_hops details')
         PRINT_algo_hops()
         t = [_[1] for _ in self.algo_hops]
         t[0], t[-1] = 0, 100

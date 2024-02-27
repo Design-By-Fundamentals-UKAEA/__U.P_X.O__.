@@ -1,3 +1,6 @@
+import numpy as np
+from termcolor import colored
+
 class _manual_uidata_mcgs_gridding_definitions_:
     """
     type : str :: Type of underlying grid

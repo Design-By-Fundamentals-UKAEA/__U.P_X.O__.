@@ -2655,7 +2655,6 @@ class mcgs2_grain_structure():
                     f.write(f"1 {x} {y} {phi1} {psi} {phi2}\n")
         f.close()
 
-    @sw()
     def export_vtk3d(self, grid: dict, grid_fields: dict, file_path: str, file_name: str, add_suffix: bool = True) -> None:
             """
             Export data to .vtk format.
@@ -2674,7 +2673,7 @@ class mcgs2_grain_structure():
             file_name : str
                 The name of the .vtk file.
             add_suffix : bool, optional
-                If True, the suffix '_upxo' will be added at the end of the file name. 
+                If True, the suffix '_upxo' will be added at the end of the file name.
                 This is advised to enable distinguishing any .vtk files you may create using
                 applications such as Dream3D etc. The default is True.
 
@@ -2699,7 +2698,7 @@ class mcgs2_grain_structure():
             except IOError as e:
                 print(f"Error saving VTK file: {e}")
 
-                
+
     def export_vtk2d(self):
         pass
 
@@ -2962,4 +2961,3 @@ class mcgs2_grain_structure():
 
         """
         pass
-

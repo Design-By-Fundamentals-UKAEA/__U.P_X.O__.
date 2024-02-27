@@ -32,7 +32,7 @@ class _uidata_mcgs_intervals_:
         self.mcint_promt_display = uidata['mcint_promt_display']
         self.mcint_plot_grain_structure = bool(uidata['mcint_plot_grain_structure'])
 
-    def __str__(self):
+    def __repr__(self):
         _ = ' '*5
         retstr = "Attributes of mcgs intervals related parameters: \n"
         retstr += f"{colored('MCINT_GRAIN_SIZE_PAR_ESTIM', 'red')}: {colored(self.mcint_grain_size_par_estim, 'green')}\n"
