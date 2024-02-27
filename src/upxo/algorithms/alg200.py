@@ -7,6 +7,7 @@ from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as GS2d
 def run(uisim, uiint, uidata, uigrid,
         xgr, ygr, zgr, px_size,
         _a, _b, _c, S, AIA0, AIA1, display_messages):
+    # ---------------------------------------------
     print("Using ALG-200: SA's SL NL-1 TP1 C2 unweighted Q-Pott's model:")
     print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG200' + 15*'-' + '|')
     gs = {}
@@ -17,11 +18,28 @@ def run(uisim, uiint, uidata, uigrid,
     # ---------------------------------------------
     # Begin modified Markov-Chain annealing iterations
     fully_annealed = False
+    fully_annealed_at_m = None
     for m in range(uisim.mcsteps):
         if S.min() == S.max():
+            print(30*'.')
             print(f'Single crystal achieved at iteration {m}.')
-            print('Stopping the simulation.')
-            fully_annealed = True
+            fully_annealed, fully_annealed_at_m = True, m
+            # Store the last temporal slice as a UPXO grain structure by
+            # default
+            gs[m] = GS2d(m=m,
+                         dim=uigrid.dim,
+                         uidata=uidata,
+                         px_size=px_size,
+                         S_total=uisim.S,
+                         xgr=xgr,
+                         ygr=ygr,
+                         uigrid=uigrid,
+                         )
+            gs[m].s = deepcopy(S)
+            if display_messages:
+                print(f"GS temporal slice {m} stored\n\n"
+                      "!! MONTE-CARLO ALG.202 run ended !!\n"
+                      "...............................")
             break
         else:
             for s0 in list(range(S.shape[0])):  # along axis 0
@@ -90,5 +108,6 @@ def run(uisim, uiint, uidata, uigrid,
                 if not save_msg:
                     print(f"Monte-Carlo temporal step = {m}")
     print('|' + 15*'-'+' MC SIM RUN COMPLETED on: ALG200' + 15*'-' + '|')
-    print(gs.keys())
+    fully_annealed = {'state': fully_annealed,
+                      'm': fully_annealed_at_m}
     return gs, fully_annealed

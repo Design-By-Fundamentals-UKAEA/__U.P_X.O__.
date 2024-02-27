@@ -13,11 +13,28 @@ def run(uisim, uiint, uidata, uigrid,
     gs = {}
     # Begin modified Markov-Chain annealing iterations
     fully_annealed = False
+    fully_annealed_at_m = None
     for m in range(uisim.mcsteps):
         if S.min() == S.max():
+            print(30*'.')
             print(f'Single crystal achieved at iteration {m}.')
-            print('Stopping the simulation.')
-            fully_annealed = True
+            fully_annealed, fully_annealed_at_m = True, m
+            # Store the last temporal slice as a UPXO grain structure by
+            # default
+            gs[m] = GS2d(m=m,
+                         dim=uigrid.dim,
+                         uidata=uidata,
+                         px_size=px_size,
+                         S_total=uisim.S,
+                         xgr=xgr,
+                         ygr=ygr,
+                         uigrid=uigrid,
+                         )
+            gs[m].s = deepcopy(S)
+            if display_messages:
+                print(f"GS temporal slice {m} stored\n\n"
+                      "!! MONTE-CARLO ALG.202 run ended !!\n"
+                      "...............................")
             break
         else:
             for s0 in list(range(S.shape[0])):  # along axis 0
@@ -82,12 +99,12 @@ def run(uisim, uiint, uidata, uigrid,
             gs[m].s = deepcopy(S)
             save_msg = True
             if display_messages:
-                print(f"GS temporal slice {m} stored")
-                print(30*'.')
+                print(f"GS temporal slice {m} stored\n", 30*".")
         if m % uiint.mcint_promt_display == 0:
             if display_messages:
                 if not save_msg:
                     print(f"Monte-Carlo temporal step = {m}")
     print('|' + 15*'-'+' MC SIM RUN COMPLETED on: ALG202' + 15*'-' + '|')
-
+    fully_annealed = {'state': fully_annealed,
+                      'm': fully_annealed_at_m}
     return gs, fully_annealed

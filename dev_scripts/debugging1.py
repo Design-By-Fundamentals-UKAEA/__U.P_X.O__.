@@ -5,3 +5,4 @@ PXGS = mcgs()
 PXGS.simulate()
 
 print(PXGS.gs)
+#PXGS.detect_grains(PXGS.m)
