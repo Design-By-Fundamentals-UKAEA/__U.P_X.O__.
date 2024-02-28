@@ -131,11 +131,9 @@ def mcgs2d(library=None,
 
     Examples
     --------
-    Import and initialize the function:
+    Import
 
         from upxo.pxtalops import detect_grains_from_mcstates as get_grains
-        gs_dict = {...}  # Pre-loaded microstructure data
-        msteps = 0  # Temporal slice index to analyze
 
     Call the function using OpenCV for grain detection:
 
@@ -148,11 +146,10 @@ def mcgs2d(library=None,
 
         gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
                                               gs_dict = PXGS.gs,
-                                              msteps = PXGS.m,
+                                              msteps = PXGS.tslices,
                                               isograin_pxl_neigh_order=2,
                                               store_state_ng=True
                                               )
-
     """
     ocv_options = ('opencv', 'ocv', 'cv', 'cv2')
     ski_options = ('scikit-image', 'skimg', 'ski', 'si')
@@ -179,7 +176,7 @@ def mcgs2d(library=None,
                 # Mark the presence of this state
                 gs_dict[m].spart_flag[_s_] = True
                 # -----------------------------------------
-                # Recognize the grains belonging to this state
+                # Identify the grains belonging to this state
                 if library in ocv_options:
                     image = (_S_ == _s_).astype(np.uint8) * 255
                     state_ng[m][i], labels = cv2.connectedComponents(image)
@@ -218,7 +215,7 @@ def mcgs2d(library=None,
     return gs_dict, state_ng
 
 
-def quick_plot_s(gs_dict, m):
+def quick_plot_s(gs_dict, mcstep):
     """
     Plot the state matrix for a given temporal slice of a microstructural
     system.
@@ -234,17 +231,20 @@ def quick_plot_s(gs_dict, m):
                       data. Each key represents a temporal slice index, and
                       its value is an object containing the state matrix
                       (`s`) among other properties.
-    - m (int): The index of the temporal slice to be visualized. This
-               corresponds to a key in `gs_dict`.
+    - mcstep (int/list): The index of the temporal slice to be visualized.
+                         This corresponds to a key in `gs_dict`. Type: list
+                         is preferred. m of type int will ge put inside a list
+                         and used as [mcstep].
 
     Returns:
     None. Directly displays the plot of the state matrix using matplotlib.
 
     Example usage:
     ```python
+
     from upxo.pxtalops import detect_grains_from_mcstates as gdetops
-    gdetops.quick_plot_s(gs_dict, 40)
-    quick_plot_s(gs_dict, 10)
+
+    gdetops.quick_plot_s(gs_dict, 10)
     ```
     This plots the state matrix for the 10th temporal slice of the
     microstructural system described in `gs_dict`.
@@ -252,13 +252,12 @@ def quick_plot_s(gs_dict, m):
     Note:
     This function requires matplotlib for plotting. Ensure matplotlib is
     installed and configured in your environment.
-
-    Assumes the state matrix (`s`) can be directly converted to an unsigned
-    8-bit integer type for visualization. If your state matrix uses a
-    different data type or contains values not suitable for direct
-    conversion, additional preprocessing may be required.
     """
-    plt.imshow(gs_dict[m].s.astype(np.uint8))
+    mcstep_max = max(list(gs_dict.keys()))
+    if mcstep > mcstep_max:
+        print(f'mcstep > max value. Plot is at max mcstep of {mcstep_max}')
+        mcstep = mcstep_max
+    plt.imshow(gs_dict[mcstep].s.astype(np.uint8))
     plt.colorbar()
-    plt.title(f"State Matrix for Temporal Slice {m}")
+    plt.title(f"MCGS2D tslice {mcstep}")
     plt.show()

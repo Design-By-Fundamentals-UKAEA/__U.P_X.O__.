@@ -108,6 +108,6 @@ def run(uisim, uiint, uidata, uigrid,
                 if not save_msg:
                     print(f"Monte-Carlo temporal step = {m}")
     print('|' + 15*'-'+' MC SIM RUN COMPLETED on: ALG201' + 15*'-' + '|')
-    fully_annealed = {'state': fully_annealed,
+    fully_annealed = {'fully_annealed': fully_annealed,
                       'm': fully_annealed_at_m}
     return gs, fully_annealed

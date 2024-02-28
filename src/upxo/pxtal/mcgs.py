@@ -56,6 +56,7 @@ from upxo.interfaces.user_inputs.gather_user_inputs import load_uidata
 from upxo._sup import gops
 # from ..interfaces.os import package_check as pkgChk
 from upxo._sup import dataTypeHandlers as dth
+from upxo.pxtalops import detect_grains_from_mcstates as get_grains
 # from ..geoEntities import mulpoint2d
 __authors__ = ["Vaasu Anandatheertha"]
 __lead_developer__ = ["Vaasu Anandatheertha"]
@@ -164,26 +165,6 @@ class grid():
             return _m_grain_str_pair_
         else:
             raise StopIteration
-
-    @property
-    def info_message_display_level(self):
-        return self.__info_message_display_level__
-
-    @property
-    def info_message_display_level_simple(self):
-        return self.__info_message_display_level__
-
-    @info_message_display_level_simple.setter
-    def info_message_display_level_simple(self):
-        self.__info_message_display_level__ = 'simple'
-
-    @property
-    def info_message_display_level_detailed(self):
-        return self.__info_message_display_level__
-
-    @info_message_display_level_detailed.setter
-    def info_message_display_level_detailed(self):
-        self.__info_message_display_level__ = 'detailed'
 
     def __repr__(self):
         self.__info_message_display_level__ = 'detailed'
@@ -382,6 +363,8 @@ class grid():
                                 self.uiint.mcint_save_at_mcstep_interval,
                                 dtype='int')
                       )
+        # Temporarily initiate the tslices. It may get updated in case,
+        # the grain growqth reaches fully_annealed codition !!
         self.tslices = list(np.arange(0,
                             self.uisim.mcsteps,
                             self.uiint.mcint_save_at_mcstep_interval,
@@ -1203,7 +1186,9 @@ class grid():
             self.uisim.s_boltz_prob = np.exp(-_a_*_)
 
     def detect_grains(self,
-                      M=None,
+                      mcsteps=None,
+                      isograin_pxl_neigh_order=2,
+                      store_state_ng=True
                       ):
         """
         Applies branching to grain identifiers based on user provided value of
@@ -1222,37 +1207,39 @@ class grid():
         None.
 
         """
-        M_available = list(self.tslices)  # Available time slices
-        if not M:
-            M = M_available
-        if type(M) == int:
-            self.detect_grains(M = [M])
-        elif type(M) in dth.dt.ITERABLES:
+        mcsteps_available = list(self.tslices) # All available temporal slices
+        if not mcsteps:
+            # no value entered, use all available values in tslices
+            mcsteps = mcsteps_available
+        if type(mcsteps)==int:
+            if mcsteps in mcsteps_available:
+                # Single value has been entered for mcsteps
+                mcsteps = [mcsteps]
+            else:
+                # Single value entered and is not one of the available slices
+                print('mcsteps is not available. It must be in PXGS.tslices')
+        # ----------------------------------------------
+        ocv_options = ('opencv', 'ocv', 'cv', 'cv2')
+        ski_options = ('scikit-image', 'skimg', 'ski', 'si')
+        # ----------------------------------------------
+        if type(mcsteps) in dth.dt.ITERABLES:
             print('////////////////////////////////')
+            _library = self.uigsc.grain_identification_library
             if self.uigrid.dim == 2:
-                if self.uigsc.grain_identification_library == 'upxo':
-                    for m in M:
-                        if m in M_available:
-                            self.identify_grains_upxo_2d(m)
-                        else:
-                            print(f'MC temporal slice no {m} invalid. Skipped')
-                elif self.uigsc.grain_identification_library == 'opencv':
+                if _library == 'upxo':
+                    print('upxo grain detection is deprecated')
+
+                elif _library in ocv_options + ocv_options:
                     print("Using opencv for grain identification")
-                    for m in M:
-                        if m in M_available:
-                            self.find_grains_opencv_2d(m)
-                        else:
-                            print(f'MC temporal slice no {m} invalid. Skipped')
-                elif self.uigsc.grain_identification_library == 'scikit-image':
-                    print("Using scikit-image for grain identification")
-                    for m in M:
-                        if m in M_available:
-                            self.find_grains_scikitimage_2d(m, connectivity=2)
-                        else:
-                            print(f'MC temporal slice no {m} invalid. Skipped')
+                    gs_dict, state_ng = get_grains.mcgs2d(library=_library,
+                                                          gs_dict=self.gs,
+                                                          msteps=mcsteps,
+                                                          isograin_pxl_neigh_order=isograin_pxl_neigh_order,
+                                                          store_state_ng=store_state_ng
+                                                          )
             elif self.uigrid.dim == 3:
                 for m in M:
-                    if m in M_available:
+                    if m in mcsteps_available:
                         self.find_grains_scilab_ndimage_3d(m)
                     else:
                         print(f'MC temporal slice no {m} invalid. Skipped')
@@ -1807,6 +1794,10 @@ class monte_carlo_grain_structure(grid):
                                             self.px_size, _a, _b, _c,
                                             self.S, self.AIA0, self.AIA1,
                                             self.display_messages)
+        # Update the tslices to accommodate the fully_annealed condition, if
+        # it is achieved during simulation
+        if fully_annealed['fully_annealed']:
+            self.tslices = list(self.gs.keys())
 
     def start_algo2d_with_hops(self):
         pass
