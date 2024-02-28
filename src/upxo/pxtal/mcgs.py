@@ -1226,10 +1226,10 @@ class grid():
             print('////////////////////////////////')
             _library = self.uigsc.grain_identification_library
             if self.uigrid.dim == 2:
+                print(_library)
                 if _library == 'upxo':
                     print('upxo grain detection is deprecated')
-
-                elif _library in ocv_options + ocv_options:
+                elif _library in ocv_options + ski_options:
                     print("Using opencv for grain identification")
                     gs_dict, state_ng = get_grains.mcgs2d(library=_library,
                                                           gs_dict=self.gs,
