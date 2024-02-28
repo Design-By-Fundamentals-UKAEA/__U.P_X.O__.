@@ -1187,8 +1187,9 @@ class grid():
 
     def detect_grains(self,
                       mcsteps=None,
-                      isograin_pxl_neigh_order=2,
-                      store_state_ng=True
+                      kernelOrder=2,
+                      store_state_ng=True,
+                      library=None
                       ):
         """
         Applies branching to grain identifiers based on user provided value of
@@ -1223,18 +1224,17 @@ class grid():
         ski_options = ('scikit-image', 'skimg', 'ski', 'si')
         # ----------------------------------------------
         if type(mcsteps) in dth.dt.ITERABLES:
-            print('////////////////////////////////')
-            _library = self.uigsc.grain_identification_library
+            if not library:
+                library = self.uigsc.grain_identification_library
             if self.uigrid.dim == 2:
-                print(_library)
-                if _library == 'upxo':
+                if library == 'upxo':
                     print('upxo grain detection is deprecated')
-                elif _library in ocv_options + ski_options:
+                elif library in ocv_options + ski_options:
                     print("Using opencv for grain identification")
-                    gs_dict, state_ng = get_grains.mcgs2d(library=_library,
+                    gs_dict, state_ng = get_grains.mcgs2d(library=library,
                                                           gs_dict=self.gs,
                                                           msteps=mcsteps,
-                                                          isograin_pxl_neigh_order=isograin_pxl_neigh_order,
+                                                          kernelOrder=kernelOrder,
                                                           store_state_ng=store_state_ng
                                                           )
             elif self.uigrid.dim == 3:
