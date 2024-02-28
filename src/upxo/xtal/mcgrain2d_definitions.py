@@ -1,3 +1,7 @@
+import numpy as np
+import cv2
+from skimage.measure import label as skim_label
+
 class grain2d():
     """
     brec: bounding rectangle of the grain
@@ -157,4 +161,3 @@ class grain2d():
             plt.xlabel(r"X-axis, $\mu m$", fontsize=12)
             plt.ylabel(r"Y-axis, $\mu m$", fontsize=12)
             plt.show()
-

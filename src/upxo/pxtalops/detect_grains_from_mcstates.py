@@ -41,41 +41,18 @@ Examples:
 
 """
 import numpy as np
-from upxo._sup import dataTypeHandlers as dth
-# from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as GS2d
 import matplotlib.pyplot as plt
+import warnings
+from upxo._sup import dataTypeHandlers as dth
 
 
-def identify_grains_upxo_2d(S):
-    """
-    Deprecated.
-    """
-
-    # NOT OPERATIONAL WITH NEW MODIFICATIONS
-    Nx = S.shape[0]
-    Ny = S.shape[1]
-    grains = []
-    visited = np.zeros_like(S, dtype=bool)
-    while np.sum(visited) < Nx*Ny:
-        # Get the indices of the first unvisited cell
-        i, j = np.unravel_index(np.argmax(~visited), (Nx, Ny))
-        # Flood-fill to find the grain
-        grain_label, grain, stack = S[i, j], [], [(i, j)]
-        while stack:
-            x, y = stack.pop()
-            if x < 0 or y < 0 or x >= Nx or y >= Ny or visited[x, y] or S[x, y] != grain_label:
-                continue
-            visited[x, y] = True
-            grain.append((x, y))
-            stack.extend([(x-1, y), (x+1, y), (x, y-1), (x, y+1)])
-        grains.append(grain)
-    return grains
+warnings.simplefilter('ignore', DeprecationWarning)
 
 
 def mcgs2d(library=None,
            gs_dict=None,
            msteps=None,
-           kernelOrder=2,
+           kernel_order=2,
            store_state_ng=True,
            ):
     """
@@ -98,7 +75,7 @@ def mcgs2d(library=None,
         include the state matrix for the specified temporal slice (`m`).
     msteps : list
         The indices of the temporal slices to analyze within `gs_dict`.
-    kernelOrder : {1, 2}, optional
+    kernel_order : {1, 2}, optional
         The pixel connectivity criterion for labeling grains. Use 1 for
         4-connectivity and 2 for 8-connectivity. Defaults to 2.
     store_state_ng : bool, optional
@@ -138,80 +115,100 @@ def mcgs2d(library=None,
     Call the function using OpenCV for grain detection:
 
         gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
-                                              gs_dict = PXGS.gs,
-                                              msteps = 10,
-                                              kernelOrder=2,
+                                              gs_dict=PXGS.gs,
+                                              msteps=10,
+                                              kernel_order=2,
                                               store_state_ng=True
                                               )
 
         gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
-                                              gs_dict = PXGS.gs,
-                                              msteps = PXGS.tslices,
-                                              kernelOrder=2,
+                                              gs_dict=PXGS.gs,
+                                              msteps=PXGS.tslices,
+                                              kernel_order=2,
                                               store_state_ng=True
                                               )
     """
-    ocv_options = ('opencv', 'ocv', 'cv', 'cv2')
-    ski_options = ('scikit-image', 'skimg', 'ski', 'si')
     # -----------------------------------------
-    # Lets import some stuffs
+    # Importing and validation of kewrnel_order
     if library == 'upxo':
-        print('Deprecated')
-    elif library in ocv_options:
+        warnings.warn("upxo native grain detection is deprecated and"
+                      " will be removed in a future version. Use options"
+                      " opencv or sckit-image instead",
+                      category=DeprecationWarning,
+                      stacklevel=2)
+
+    elif library in dth.opt.ocv_options:
         import cv2
-    elif library in ski_options:
+        # Acceptable values for opencv: 4, 8
+        if kernel_order in (4, 8):
+            KO = kernel_order
+        elif kernel_order in (1, 2):
+            KO = 4*kernel_order
+        else:
+            raise ValueError("Input must be in (1, 2, 4, 8)."
+                             f" Recieved {kernel_order}")
+    elif library in dth.opt.ski_options:
         from skimage.measure import label as skim_label
+        # Acceptable values for opencv: 1, 2
+        if kernel_order in (4, 8):
+            KO = int(kernel_order/4)
+        elif kernel_order in (1, 2):
+            KO = kernel_order
+        else:
+            raise ValueError("Input must be in (1, 2, 4, 8)."
+                             f" Recieved {kernel_order}")
     # -----------------------------------------
-    # Handling datatypes
-    if type(msteps) == int:
+    # Validate and prepare msteps
+    if isinstance(msteps, int):
         msteps = [msteps]
-    if type(msteps) not in dth.dt.ITERABLES:
-        raise TypeError(f"msteps must be an iterable type. Received: {type(msteps)}")
-    else:
-        state_ng = {}
-        for m in msteps:
-            _S_ = gs_dict[m].s
-            state_ng[m] = np.zeros(np.unique(_S_).size, dtype=int)
-            for i, _s_ in enumerate(np.unique(_S_)):
-                # Mark the presence of this state
-                gs_dict[m].spart_flag[_s_] = True
-                # -----------------------------------------
-                # Identify the grains belonging to this state
-                if library in ocv_options:
-                    image = (_S_ == _s_).astype(np.uint8) * 255
-                    state_ng[m][i], labels = cv2.connectedComponents(image)
-                elif library in ski_options:
-                    bin_img = (_S_ == _s_).astype(np.uint8)
-                    labels, state_ng[m][i] = skim_label(bin_img,
-                                                        return_num=True,
-                                                        connectivity=kernelOrder)
-                # -----------------------------------------
-                if i == 0:
-                    gs_dict[m].lgi = labels
-                else:
-                    labels[labels > 0] += gs_dict[m].lgi.max()
-                    gs_dict[m].lgi = gs_dict[m].lgi + labels
-                # -----------------------------------------
-                gs_dict[m].s_gid[_s_] = tuple(np.delete(np.unique(labels), 0))
-                gs_dict[m].s_n[_s_-1] = len(gs_dict[m].s_gid[_s_])
-                print(f"MC state = {_s_}:  Num grains = {gs_dict[m].s_n[_s_-1]}")
-            # Get the total number of grains
-            gs_dict[m].n = np.unique(gs_dict[m].lgi).size
-            # Generate and store the gid-s mapping
-            gs_dict[m].gid = list(range(1, gs_dict[m].n+1))
-            _gid_s_ = []
-            for _gs_, _gid_ in zip(gs_dict[m].s_gid.keys(),
-                                   gs_dict[m].s_gid.values()):
-                if _gid_:
-                    for __gid__ in _gid_:
-                        _gid_s_.append(_gs_)
-                else:
-                    _gid_s_.append(0)
-            gs_dict[m].gid_s = _gid_s_
-            # Make the output string to print on promnt
-            optput_string_01 = f'Temporal slice number = {m}.'
-            optput_string_02 = f' |||| No. of grains detected = {gs_dict[m].n}'
-            print(optput_string_01 + optput_string_02)
+    if not hasattr(msteps, '__iter__'):
+        raise TypeError("Required @mcsteps: iterable."
+                        f" Received: {type(msteps)}")
+    # -----------------------------------------
+    # Detect grains and store necessary data
+    state_ng = {}
+    for m in msteps:
+        _S_ = gs_dict[m].s
+        state_ng[m] = np.zeros(np.unique(_S_).size, dtype=int)
+        for i, _s_ in enumerate(np.unique(_S_)):
+            # Mark the presence of this state
+            gs_dict[m].spart_flag[_s_] = True
+            # -----------------------------------------
+            # Identify the grains belonging to this state
+            BI = (_S_ == _s_).astype(np.uint8)  # Binary image
+            if library in dth.opt.ocv_options:
+                state_ng[m][i], labels = cv2.connectedComponents(BI*255,
+                                                                 connectivity=KO
+                                                                 )
+            elif library in dth.opt.ski_options:
+                labels, state_ng[m][i] = skim_label(BI,
+                                                    return_num=True,
+                                                    connectivity=KO)
+            # -----------------------------------------
+            if i == 0:
+                gs_dict[m].lgi = labels
+            else:
+                labels[labels > 0] += gs_dict[m].lgi.max()
+                gs_dict[m].lgi = gs_dict[m].lgi + labels
+            # -----------------------------------------
+            gs_dict[m].s_gid[_s_] = tuple(np.delete(np.unique(labels), 0))
+            gs_dict[m].s_n[_s_-1] = len(gs_dict[m].s_gid[_s_])
+            print(f"MC state = {_s_}:  Num grains = {gs_dict[m].s_n[_s_-1]}")
+        # Get the total number of grains
+        gs_dict[m].n = np.unique(gs_dict[m].lgi).size
+        # Generate and store the gid-s mapping
+        gs_dict[m].gid = list(range(1, gs_dict[m].n+1))
+        _gid_s_ = []
+        for _gs_, _gid_ in gs_dict[m].s_gid.items():
+            if _gid_:
+                for __gid__ in _gid_:
+                    _gid_s_.append(_gs_)
+            else:
+                _gid_s_.append(0)
+        gs_dict[m].gid_s = _gid_s_
+        # Make the output string to print on promnt
+        print(f"Temporal slice number = {m}.\n"
+              f"|||| No. of grains detected = {gs_dict[m].n}")
     return gs_dict, state_ng
 
 
@@ -261,3 +258,29 @@ def quick_plot_s(gs_dict, mcstep):
     plt.colorbar()
     plt.title(f"MCGS2D tslice {mcstep}")
     plt.show()
+
+
+def identify_grains_upxo_2d(S):
+    """
+    Deprecated.
+    """
+
+    # NOT OPERATIONAL WITH NEW MODIFICATIONS
+    Nx = S.shape[0]
+    Ny = S.shape[1]
+    grains = []
+    visited = np.zeros_like(S, dtype=bool)
+    while np.sum(visited) < Nx*Ny:
+        # Get the indices of the first unvisited cell
+        i, j = np.unravel_index(np.argmax(~visited), (Nx, Ny))
+        # Flood-fill to find the grain
+        grain_label, grain, stack = S[i, j], [], [(i, j)]
+        while stack:
+            x, y = stack.pop()
+            if x < 0 or y < 0 or x >= Nx or y >= Ny or visited[x, y] or S[x, y] != grain_label:
+                continue
+            visited[x, y] = True
+            grain.append((x, y))
+            stack.extend([(x-1, y), (x+1, y), (x, y-1), (x, y+1)])
+        grains.append(grain)
+    return grains

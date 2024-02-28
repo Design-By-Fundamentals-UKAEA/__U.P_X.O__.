@@ -53,7 +53,7 @@ import numpy as np
 from numpy import inf as INFINITY
 from numpy.random import uniform as npru
 from scipy.spatial import cKDTree as ckdt
-from .._sup import dataTypeHandlers as dth
+from upxo._sup import dataTypeHandlers as dth
 # import datatype_handlers as dth
 import pandas as pd
 # from point2d_04 import point2d
@@ -351,6 +351,8 @@ class opt():
     mcgs2d_reload_data_xlsx = ('pl', 'ebsd', 'grid', 'simpar', 'sim', 'ori',
                                'gsc', 'mps', 'grep', 'rqual', 'ps', 'mesh',
                                'gsvis', 'export', 'log', 'report')
+    ocv_options = ('opencv', 'ocv', 'cv', 'cv2')
+    ski_options = ('scikit-image', 'skimg', 'ski', 'si')
 
 @dataclass
 class valid_region_properties():

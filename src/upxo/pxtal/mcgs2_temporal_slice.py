@@ -1,3 +1,9 @@
+from copy import deepcopy
+import numpy as np
+import matplotlib.pyplot as plt
+import cv2
+from skimage.measure import label as skim_label
+
 class mcgs2_grain_structure():
     __slots__ = ('dim',  # Dimensionality of the grain structure
                  'uigrid',  # Copy of grid.uigrid datastructure
@@ -32,7 +38,6 @@ class mcgs2_grain_structure():
                  '__ui',  # Stores original user inp used by grid() instance
                  'display_messages',
                  'info',
-                 'study'
                  )
     '''
     Explanation of 'n':
@@ -78,11 +83,10 @@ class mcgs2_grain_structure():
             - if no grains bvelowng to state s, then a will be None
         * and so on..
     '''
-    EPS = 0.000000000001
+    EPS = 1e-12
     __maxGridSizeToIgnoreStoringGrids = 25**3
 
     def __init__(self,
-                 study='idependent',
                  dim=2,
                  m=None,
                  uidata=None,
@@ -114,7 +118,6 @@ class mcgs2_grain_structure():
         None.
 
         """
-        self.study = study
         self.dim = dim
         self.m = m
         self.S = S_total
@@ -687,7 +690,8 @@ class mcgs2_grain_structure():
         # euler_number, perimeter, perimeter_crofton = [], [], []
         # compactness, npixels_gb = [], []
         # ---------------------------------------------
-        from mcgs import grain2d
+        # from mcgs import grain2d
+        from upxo.xtal.mcgrain2d_definitions import grain2d
         # ---------------------------------------------
         from skimage.measure import regionprops
         # ---------------------------------------------
@@ -2594,6 +2598,7 @@ class mcgs2_grain_structure():
 
     def vtgs2d(self, visualize=True):
         from polyxtal import polyxtal2d as polyxtal
+        import upxo.pxtal.polyxtal as polyxtal
         self.make_mulpoint2d_grain_centroids()
         self.vtgs = polyxtal(gsgen_method = 'vt',
                              vt_base_tool = 'shapely',

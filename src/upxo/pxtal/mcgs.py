@@ -1187,64 +1187,99 @@ class grid():
 
     def detect_grains(self,
                       mcsteps=None,
-                      kernelOrder=2,
+                      kernel_order=2,
                       store_state_ng=True,
                       library=None
                       ):
         """
-        Applies branching to grain identifiers based on user provided value of
-        grain_identification_librar (which, could be UPXO (deprecated), opencv,
-                                     scikit-image).
-        M is the temporal slice number. If not provided, grains will be
-        detected in all available temporal slices.
+        Detect grains in microstructure images using specified image processing
+        library.
 
-        Parameters
-        ----------
-        M : TYPE, optional
-            DESCRIPTION. The default is None.
+        This method identifies and segments grains in two-dimensional (2D) or
+        three-dimensional (3D) microstructure images based on the provided
+        temporal slices (mcsteps), using either OpenCV or scikit-image
+        libraries for 2D images, and a SciLab-based approach for 3D images.
 
-        Returns
-        -------
-        None.
+        Parameters:
+        - mcsteps (int or iterable of int, optional): Specifies the temporal
+          slices to analyze. If not provided, all available temporal slices
+          are used.
+          Each temporal slice corresponds to a unique microstructure state.
+        - kernel_order (int, optional): Specifies the connectivity for grain
+          identification. A higher order increases the connectivity considered
+          during grain detection. Defaults to 2, indicating 8-connectivity in
+          2D and 26-connectivity in 3D.
+        - store_state_ng (bool, optional): If True, stores the state of newly
+          generated grains. Defaults to True.
+        - library (str, optional): Specifies the library to use for grain
+          identification in 2D. Supported libraries are 'opencv' and
+          'scikit-image'. If not specified, the default library set in the
+          user's ImageGrainSize
+          Configuration (uigsc) is used.
 
+        Raises:
+        - TypeError: If `mcsteps` is neither an int nor an iterable of int.
+        - ValueError: If `mcsteps` contains values not available in the
+          temporal slices or if the specified `library` is not supported for
+          the operation.
+
+        Returns:
+        - None: Modifies the object's state by updating the grain segmentation
+          information for the specified temporal slices.
+
+        Notes:
+        - The 'upxo' library option is deprecated for 2D grain detection.
+        - This method supports different libraries for 2D and uses a specific
+          method for 3D grain detection that does not rely on the `library`
+          parameter.
         """
-        mcsteps_available = list(self.tslices) # All available temporal slices
+        mcsteps_available = list(self.tslices)  # All available temporal slices
         if not mcsteps:
             # no value entered, use all available values in tslices
             mcsteps = mcsteps_available
-        if type(mcsteps)==int:
+
+        if not isinstance(mcsteps, int) and not hasattr(mcsteps, '__iter__'):
+            raise TypeError("mcsteps must be an int or an iterable.")
+
+        if type(mcsteps) == int:
             if mcsteps in mcsteps_available:
                 # Single value has been entered for mcsteps
                 mcsteps = [mcsteps]
             else:
                 # Single value entered and is not one of the available slices
-                print('mcsteps is not available. It must be in PXGS.tslices')
-        # ----------------------------------------------
-        ocv_options = ('opencv', 'ocv', 'cv', 'cv2')
-        ski_options = ('scikit-image', 'skimg', 'ski', 'si')
-        # ----------------------------------------------
-        if type(mcsteps) in dth.dt.ITERABLES:
-            if not library:
-                library = self.uigsc.grain_identification_library
-            if self.uigrid.dim == 2:
-                if library == 'upxo':
-                    print('upxo grain detection is deprecated')
-                elif library in ocv_options + ski_options:
-                    print("Using opencv for grain identification")
-                    gs_dict, state_ng = get_grains.mcgs2d(library=library,
-                                                          gs_dict=self.gs,
-                                                          msteps=mcsteps,
-                                                          kernelOrder=kernelOrder,
-                                                          store_state_ng=store_state_ng
-                                                          )
-            elif self.uigrid.dim == 3:
-                for m in M:
-                    if m in mcsteps_available:
-                        self.find_grains_scilab_ndimage_3d(m)
-                    else:
-                        print(f'MC temporal slice no {m} invalid. Skipped')
-        else:
-            print('Please enter valid M as list/tuple')
+                raise ValueError(f"mcsteps={mcsteps} not avaialble."
+                                 f"Value must be from {self.tslices}")
+
+        for _ in mcsteps:
+            if _ not in self.tslices:
+                ValueError(f"mcstep={_} not avaialble."
+                           f"Value must be from {self.tslices}")
+
+        if not library:
+            library = self.uigsc.grain_identification_library
+
+        if self.uigrid.dim == 2:
+            if library == 'upxo':
+                print('upxo grain detection is deprecated')
+            elif library in dth.opt.ocv_options + dth.opt.ski_options:
+                print(f"Using {library} for grain identification")
+                self.gs, state_ng = get_grains.mcgs2d(library=library,
+                                                      gs_dict=self.gs,
+                                                      msteps=mcsteps,
+                                                      kernel_order=kernel_order,
+                                                      store_state_ng=store_state_ng
+                                                      )
+            else:
+                raise ValueError("Required library should be in, "
+                                 f"{dth.opt.ocv_options + dth.opt.ski_options}"
+                                 f". Receeived: {library}")
+
+        if self.uigrid.dim == 3:
+            for m in mcsteps:
+                if m in mcsteps_available:
+                    self.find_grains_scilab_ndimage_3d(m)
+                else:
+                    print(f'MC temporal slice no {m} invalid. Skipped')
 
     def char_morph_2d(self,
                       M,
