@@ -75,7 +75,7 @@ def identify_grains_upxo_2d(S):
 def mcgs2d(library=None,
            gs_dict=None,
            msteps=None,
-           isograin_pxl_neigh_order=2,
+           kernelOrder=2,
            store_state_ng=True,
            ):
     """
@@ -98,7 +98,7 @@ def mcgs2d(library=None,
         include the state matrix for the specified temporal slice (`m`).
     msteps : list
         The indices of the temporal slices to analyze within `gs_dict`.
-    isograin_pxl_neigh_order : {1, 2}, optional
+    kernelOrder : {1, 2}, optional
         The pixel connectivity criterion for labeling grains. Use 1 for
         4-connectivity and 2 for 8-connectivity. Defaults to 2.
     store_state_ng : bool, optional
@@ -140,14 +140,14 @@ def mcgs2d(library=None,
         gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
                                               gs_dict = PXGS.gs,
                                               msteps = 10,
-                                              isograin_pxl_neigh_order=2,
+                                              kernelOrder=2,
                                               store_state_ng=True
                                               )
 
         gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
                                               gs_dict = PXGS.gs,
                                               msteps = PXGS.tslices,
-                                              isograin_pxl_neigh_order=2,
+                                              kernelOrder=2,
                                               store_state_ng=True
                                               )
     """
@@ -184,7 +184,7 @@ def mcgs2d(library=None,
                     bin_img = (_S_ == _s_).astype(np.uint8)
                     labels, state_ng[m][i] = skim_label(bin_img,
                                                         return_num=True,
-                                                        connectivity=isograin_pxl_neigh_order)
+                                                        connectivity=kernelOrder)
                 # -----------------------------------------
                 if i == 0:
                     gs_dict[m].lgi = labels

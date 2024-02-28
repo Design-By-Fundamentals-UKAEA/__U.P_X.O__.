@@ -101,8 +101,7 @@ def run(uisim, uiint, uidata, uigrid,
             gs[m].s = deepcopy(S)
             save_msg = True
             if display_messages:
-                print(f"GS temporal slice {m} stored")
-                print(30*'.')
+                print(f"GS temporal slice {m} stored\n", 30*".")
         if m % uiint.mcint_promt_display == 0:
             if display_messages:
                 if not save_msg:
