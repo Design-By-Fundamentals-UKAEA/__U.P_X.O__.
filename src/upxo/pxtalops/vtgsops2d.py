@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Jul 12 11:00:09 2022
-
-@author: rg5749
-"""
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import convolve
+from skimage.measure import label, regionprops
+from skimage.segmentation import find_boundaries
 
 from shapely.ops import voronoi_diagram
 from shapely.geometry import Point
@@ -15,6 +14,8 @@ import numpy as np
 from scipy.spatial import cKDTree
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
 from shapely.geometry import LinearRing
+
+
 
 def bounding_rectangle_pxtal(pxtal):
     # Calculate the grid on the poly-xtal

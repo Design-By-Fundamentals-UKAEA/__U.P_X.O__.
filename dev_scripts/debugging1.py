@@ -29,7 +29,7 @@ gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
 #               GRAIN STRUCTURE VISUALIZATION
 """ View the grain streucture """
 # Simple
-#PXGS.gs[10].plot()
+#PXGS.gs[8].plot()
 
 
 

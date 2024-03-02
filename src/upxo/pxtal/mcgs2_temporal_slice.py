@@ -2597,7 +2597,7 @@ class mcgs2_grain_structure():
         plt.show()
 
     def vtgs2d(self, visualize=True):
-        from polyxtal import polyxtal2d as polyxtal
+        # from polyxtal import polyxtal2d as polyxtal
         import upxo.pxtal.polyxtal as polyxtal
         self.make_mulpoint2d_grain_centroids()
         self.vtgs = polyxtal(gsgen_method = 'vt',
