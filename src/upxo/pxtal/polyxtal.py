@@ -31,20 +31,18 @@ from shapely import speedups
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
 from collections import deque
-from point2d_04 import point2d
-from mulpoint2d_3 import mulpoint2d
-from distr_01 import distribution as dstr
 from colorama import init as colorama_init
-from console_formats import console_seperator
-
-import numpy as np
 import numpy.random as rand
 import time
 import matplotlib.pyplot as plt
 from random import sample
 
-
-
+from upxo.geoEntities.point2d_04 import point2d
+from upxo.geoEntities.mulpoint2d_3 import mulpoint2d
+from upxo.statops.distr_01 import distribution
+from upxo._sup.console_formats import console_seperator
+from upxo.pxtal.vt import _shapely
+from upxo.statops.distr_01 import distribution
 #//////////////////////////////////////////////////////////////////////////////
 class INSTANCES():
     '''
@@ -64,7 +62,7 @@ class INSTANCES():
 
 
 #//////////////////////////////////////////////////////////////////////////////
-class polyxtal2d():
+class vtpolyxtal2d():
     # TODO: change the following names to:
         # 1. areas_polygonal_exterior: L0_x_ape
     def __init__(self,
@@ -268,7 +266,6 @@ class polyxtal2d():
         #.......................
         if vt_base_tool == 'shapely':
             print('I am in shapely')
-            from vt import _shapely
             self.L0.pxtal = _shapely(point_method = 'mulpoints',
                                      _x = self.L0.coord_seeds_x,
                                      _y = self.L0.coord_seeds_y,
@@ -302,11 +299,11 @@ class polyxtal2d():
                                    )
 
             # APE_dis: areas_polygonal_exterior -- values
-            self.L0.xtal_ape_dstr = dstr(data_name = 'L0.xtals_ape',
+            self.L0.xtal_ape_dstr = distribution(data_name = 'L0.xtals_ape',
                                           data = np.array(self.L0.xtal_ape_val)
                                           )
 
-            self.L0.xtal_pe_dstr = dstr(data_name = 'L0.xtals_pe',
+            self.L0.xtal_pe_dstr = distribution(data_name = 'L0.xtals_pe',
                                          data = np.array(self.L0.xtal_pe_val)
                                          )
             #self.make_mpo_L0_centroids() # pxtal.L0.mpo_xtals_centroids
@@ -2114,6 +2111,8 @@ class polyxtal2d():
         Documentation
         '''
         pass
+    def get_L0_ng(self):
+        return len(self.L0.xtals_ids)
     #\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     # IDS OF THE FEATURES
     def get_ids_L0_all_xtals(self):

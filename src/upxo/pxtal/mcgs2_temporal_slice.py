@@ -3,7 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from skimage.measure import label as skim_label
-
+from upxo.geoEntities.point2d_04 import point2d
+from upxo.geoEntities.mulpoint2d_3 import mulpoint2d
+from upxo._sup.console_formats import print_incrementally
 class mcgs2_grain_structure():
     __slots__ = ('dim',  # Dimensionality of the grain structure
                  'uigrid',  # Copy of grid.uigrid datastructure
@@ -38,6 +40,7 @@ class mcgs2_grain_structure():
                  '__ui',  # Stores original user inp used by grid() instance
                  'display_messages',
                  'info',
+                 'print_interval_bool'
                  )
     '''
     Explanation of 'n':
@@ -349,8 +352,11 @@ class mcgs2_grain_structure():
             if throw:
                 return self.n
 
+    @print_incrementally
     def neigh(self):
-        for _gid_ in self.gid:
+        for idx, _gid_ in enumerate(self.gid):
+            if self.print_interval_bool[idx]:
+                print(f'Extracting neigh list for grain: {_gid_}')
             self.neigh_gid(_gid_)
 
     def neigh_gid(self, gid, throw=False):
@@ -701,17 +707,21 @@ class mcgs2_grain_structure():
         print('////////////////////////////////')
         print('Extracting requested grain structure properties across all available states')
         for s in self.s_gid.keys():
-            if self.display_messages:
-                print(f"     State value: {s}")
+            #if self.display_messages:
+            print(f"     State value: {s}")
             # Extract s values which contain grains
-            s_gid_vals_npy = list(self.s_gid.values())
-            nonNone = np.argwhere(np.array(list(self.s_gid.values())) != None)
-            s_gid_vals_npy = [s_gid_vals_npy[i] for i in np.squeeze(nonNone)]
-            s_gid_keys_npy = np.array(list(self.s_gid.keys()))
-            s_gid_keys_npy = s_gid_keys_npy[np.squeeze(nonNone)]
+            # s_gid_vals_npy = list(self.s_gid.values())
+
+            # nonNone = np.argwhere(np.array(list(self.s_gid.values())) != None)
+            # s_gid_vals_npy = [s_gid_vals_npy[i] for i in np.squeeze(nonNone)]
+            # s_gid_keys_npy = np.array(list(self.s_gid.keys()))
+            # s_gid_keys_npy = s_gid_keys_npy[np.squeeze(nonNone)]
+
+            s_gid_keys_npy = [skey for skey in self.s_gid.keys() if self.s_gid[skey]]
             # ---------------------------------------------
             sn = 1
-            for state, grains in zip(s_gid_keys_npy, s_gid_vals_npy):
+            for state in s_gid_keys_npy:
+                grains = self.s_gid[state]
                 # Iterate through each grain of this state value
                 for gn in grains:
                     _, lab = cv2.connectedComponents(np.array(self.lgi == gn,
@@ -2598,18 +2608,18 @@ class mcgs2_grain_structure():
 
     def vtgs2d(self, visualize=True):
         # from polyxtal import polyxtal2d as polyxtal
-        import upxo.pxtal.polyxtal as polyxtal
+        from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
         self.make_mulpoint2d_grain_centroids()
-        self.vtgs = polyxtal(gsgen_method = 'vt',
-                             vt_base_tool = 'shapely',
-                             point_method = 'mulpoints',
-                             mulpoint_object = self.mp['gc'],
-                             xbound = [self.uigrid.xmin,
-                                       self.uigrid.xmax+self.uigrid.xinc],
-                             ybound = [self.uigrid.ymin,
-                                       self.uigrid.ymax+self.uigrid.yinc],
-                             vis_vtgs = True
-                             )
+        self.vtgs = vtpxtal(gsgen_method = 'vt',
+                            vt_base_tool = 'shapely',
+                            point_method = 'mulpoints',
+                            mulpoint_object = self.mp['gc'],
+                            xbound = [self.uigrid.xmin,
+                                      self.uigrid.xmax+self.uigrid.xinc],
+                            ybound = [self.uigrid.ymin,
+                                      self.uigrid.ymax+self.uigrid.yinc],
+                            vis_vtgs = True
+                            )
         if visualize:
             self.vtgs.plot(dpi = 100,
                            default_par_faces = {'clr': 'teal', 'alpha': 1.0, },

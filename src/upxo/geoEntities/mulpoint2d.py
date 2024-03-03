@@ -18,9 +18,9 @@ __license__ = "GPL v3"
 # /////////////////////////////////////////////////////////////////////////////
 import numpy as np
 from collections import deque
-from ..geoEntities import point2d
+from upxo.geoEntities import point2d
 import matplotlib.pyplot as plt
-from .._sup import dataTypeHandlers as dth
+from upxo._sup import dataTypeHandlers as dth
 # /////////////////////////////////////////////////////////////////////////////
 
 
@@ -97,7 +97,7 @@ class mulpoint2d():
                  reprstate: bool = False
                  ):
         self.lean = lean
-        self.name = name
+        # self.name = name
         self.xbound = xbound
         self.ybound = ybound
         self.mulpoint_type = mulpoint_type

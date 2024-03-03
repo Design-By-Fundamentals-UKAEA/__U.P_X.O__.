@@ -338,7 +338,6 @@ class grid():
                                            )
 
     def initiate(self):
-        print('I am in')
         self._mcsteps_ = [self.uisim.S]
         # -------------------------------------------
         if self.uigrid.dim == 2:
@@ -1785,7 +1784,6 @@ class monte_carlo_grain_structure(grid):
                                             )
         # START THE MONTE-CARLO SIMULATIONS
         if self.uigrid.dim == 2 and len(self.uisim.algo_hops) == 1:
-            print('I AM IN HERE -- 1')
             self.algo_hop = False
             self.start_algo2d_without_hops()
         elif self.uigrid.dim == 2 and len(self.uisim.algo_hops) > 1:
@@ -1838,7 +1836,6 @@ class monte_carlo_grain_structure(grid):
         pass
 
     def start_algo3d_without_hops(self):
-        print('I AM IN HERE -- 2')
         if self.uisim.mcalg == '300':
             print("Using ALG-300")
             print('////////////////////////////////')

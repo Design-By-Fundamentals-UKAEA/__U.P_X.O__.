@@ -29,8 +29,7 @@ xnew = []
 ynew = []
 for count in range(N_interp_points):
     if inter_point_selection == 'linear':
-        
-        factor = edge_domain[0] + 
+        factor = edge_domain[0]
     elif inter_point_selection == 'ru':
         factor = edge_domain[0]+random.random()*(edge_domain[1]-edge_domain[0])
     x_coord_temp = min([gb_edges_x[0][1], gb_edges_x[0][0]])+factor*abs(gb_edges_x[0][1]-gb_edges_x[0][0])

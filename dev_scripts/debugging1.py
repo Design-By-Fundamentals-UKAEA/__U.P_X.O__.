@@ -29,8 +29,26 @@ gs_dict, state_ng = get_grains.mcgs2d(library='scikit-image',
 #               GRAIN STRUCTURE VISUALIZATION
 """ View the grain streucture """
 # Simple
-#PXGS.gs[8].plot()
+PXGS.gs[8].plot()
+# //////////////////////////////////////////////////
+#               GRAIN STRUCTURE CHARACTERISATION
+mt = 8
+PXGS.gs[mt].char_morph_2d()
+# //////////////////////////////////////////////////
+#               IDENTIFY GRAIN NEIGHBOURS
+PXGS.gs[mt].neigh()
+# //////////////////////////////////////////////////
+#               GENERATE VTGS EQUIVALENT
+PXGS.gs[mt].vtgs2d(visualize=True)
+PXGS.gs[mt].vtgs.get_L0_ng()
+# //////////////////////////////////////////////////
+from upxo.meshing.pxtalmesh_01 import vtpxtalmesh
+pxtal_mesh = vtpxtalmesh(pxtal = PXGS.gs[8].vtgs,
+                         mesher = 'pygmsh',
+                         elshape = 'tri',
+                         elorder = 1,
+                         algorithm = 6,
+                         elsize_global = [2., 2.5, 2.5],
+                         )
 
-
-
-PXGS.gs[10].char_morph_2d()
+pxtal_mesh.get_pygmsh_mesh_feature_count()
