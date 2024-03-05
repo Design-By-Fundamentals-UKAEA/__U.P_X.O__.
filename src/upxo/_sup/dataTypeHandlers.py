@@ -43,7 +43,6 @@ __maintainers__ = ["Vaasu Anandatheertha (vaasu.anandatheertha@ukaea.uk)",
                    ]
 __version__ = ["0.1.from.301222.git-no", "0.2.from.030123.git-yes"
                ]
-__license__ = "GPL v3"
 
 from dataclasses import dataclass
 from collections import deque
@@ -353,6 +352,17 @@ class opt():
                                'gsvis', 'export', 'log', 'report')
     ocv_options = ('opencv', 'ocv', 'cv', 'cv2')
     ski_options = ('scikit-image', 'skimg', 'ski', 'si')
+    # BO: Branch options
+    mc_BO = ('mc', 'montecarlo')
+    mc2d_BO = ('mc2', 'mc2d', 'montecarlo2', 'montecarlo2d')
+    mc3d_BO = ('mc3', 'mc3d', 'montecarlo3', 'montecarlo3d')
+    mc_BO_all = mc_BO + mc2d_BO + mc3d_BO
+
+    vt_BO = ('vt', 'voronoi', 'voronoitessellation', 'geo', 'geotess')
+    vt2d_BO = ('vt2', 'vt2d', 'voronoi2d', 'voronoi2', 'geo2', 'geotess2')
+    vt3d_BO = ('vt3', 'vt3d', 'voronoi3d', 'voronoi3', 'geo3', 'geotess3')
+    vt_BO_all = vt_BO + vt2d_BO + vt3d_BO
+
 
 @dataclass
 class valid_region_properties():
@@ -403,6 +413,9 @@ def strip_str(options, char=['_', ',', '.', '&', '|', '-', '*']):
     options = ('pol', 'pol_area', 'polarea')
     dth._strip_(options)
     """
+    if not isinstance(options, str):
+        raise TypeError('Invalid type(options). Expected string. ',
+                        f'Receieved: {type(options)}')
     extract = False
     if type(options) not in dth.dt.ITERABLES:
         options = [options]

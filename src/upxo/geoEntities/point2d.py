@@ -17,16 +17,14 @@ NOTE: NOT TO BE SHARED WITH ANYONE OTHER THAN:
 '''
 
 # from numpy.random import uniform as nprandu
-from .._sup import dataTypeHandlers as dth
+from shapely.geometry import Point
+from upxo._sup import dataTypeHandlers as dth
 import matplotlib.pyplot as plt
+from copy import deepcopy
 import numpy as np
-import math
-from math import ceil, floor, radians, sin, cos
-import cProfile
-from ..geoEntities import pops
-# import pops
+from math import ceil, floor
 # import random
-__name__ = "UPXO-point"
+__name__ = "UPXO-geoEntity"
 __lead_developers__ = ["Dr. Vaasu Anandatheertha"]
 __developers__ = ["Vaasu Anandatheertha (vaasu.anandatheertha@ukaea.uk)",
                   ]
@@ -35,70 +33,95 @@ __maintainers__ = ["Vaasu Anandatheertha (vaasu.anandatheertha@ukaea.uk)",
 __version__ = ["0.1.upto.271022.git-no", "0.2.from.281022.git-no",
                "0.3.from.031122.git-no", "0.4.from.111122.git-no",
                "0.5.from.021222.git-no", "0.6.from.081222.git-no",
-               "0.7.from.221222.git-no", "0.8.from.200623.git-no"
+               "0.7.from.221222.git-no", ""
                ]
 __license__ = "GPL v3"
 
+
 class point2d():
     '''Class representing point2d object in physical space.
-    PROFILING DETAILS
-    -----------------
-    Number of runs = 10000
-    Sl | Detail | Cum.Time | No. Func. Calls
-    -- | ------ | -------- | ---------------
-    01 | Instantiation-ignore  | 0.012 | 20001
-    02 | Instantiation-low     | 0.012 | 20001
-    03 | Instantiation-medium  | 0.010 | 20001
-    04 | Instantiation-high    | 0.006 | 20001
-    05 | Instantiation-highest | 0.005 | 20001
-
     '''
-    """
-    Decisions - point2d class
-    1. ROUND_ZERO_DEC_PLACE - DONE. removed
-    2. EPSILON_above - DONE. removed
-    3. EPSILON_below - DONE. removed
-    4. EPSILON_left - DONE. removed
-    5. EPSILON_right - DONE. removed
-    6. EPSILON_divisor - DONE. removed
-    7. EPSILON_rotate - DONE. removed
-    8. angle - DONE. removed
-    9. angles - DONE. removed
-    10. Put [loc, ptype, jn, phase_id, phase_name, tcname] inside a "state" dictionary - DONE.
-    11. Put [_mulpoints_, _edges_, __muledges__, _xtals_, _polyxtals_, orientation_object] inside a "links" dictionary - DONE.
-    12. vprop - can be removed? - DONE. removed
-    13. Put [mesh_lc] inside a "msh" dictionary
-    14. Put [sfv_pol_area, sfv_pol_perimeter, sfv_pol_ar, sfv_repr_ea, sfv_ea] inside a "sfv" dictionary slot
-    15. Reduce functions calls
-    16. Remove slot for pixels - DONE. removed
-    17. Move pixellation method to a new pops module
-    18. Remove dim - DONE. removed
-    """
-    EPSILON = 1e-12
-    __slots__ = ('lean',  # Complexity branching
+    ROUND_ZERO_DEC_PLACE = 10
+    ε = 0.000000000001
+    EPS = 0.000000000001
+    EPS_above = EPS
+    EPS_below = EPS
+    EPS_left = EPS
+    EPS_right = EPS
+    EPS_divisor = EPS
+
+    __slots__ = ('dim',  # Dimension of the model
+                 'lean',  # Complexity branching
                  'mid',  # memory id of the point
+                 'loc',  # Location of the point in pxtal
+                 'ptype',  # point type
+                 'jn',  # Order of the junction point
+
                  'x', 'y',  # x and y - coordinates
-                 'state',  # Dict of ptype, jn, phase_id, phase_name, tcname
+                 'angle',  # angle in degrees, anti-clockwise +
+                 'angles',  # list of angles in degrees, anti-clockwise +
+
+                 'phase_id',  # SFVM -- Phase id
+                 'phase_name',  # SFVM -- Phase name. Defaults to CuCrZr
+                 'tcname',  # SFVM -- texture component name
                  'tdist',  # for use in comparison operations
-                 'links',  # Dict of linked UPXO objects
+
+                 '_mulpoints_',  # list of attached multi-point objects
+                 '_edges_',  # list of attached edge objects
+                 '_muledges_',  # list of attached multi-edge objects
+                 '_xtals_',  # list of attached partition objects
+                 '_polyxtals_',  # list of attached poly-partition objects
                  '_original_location',  # original x and y
-                 'data',  # Dict of Misc data
+
+                 'sfv_pol_area',  # SFVM -- Polygonal area
+                 'sfv_pol_perimeter',  # SFVM -- Polygonal length
+                 'sfv_pol_aspect_ratio',  # Aspect ratio of the partiion
+                 'sfv_repr_ea',  # SFVM -- Euler angle repr (ex: 'Bunge')
+                 'sfv_ea',  # SFVM -- Euler angle in degrees
+                 'orientation_object',  # SFVM -- UPXO Orientation object
+                 'partition',  # Dataclass instance to store buffer polygons
+                 'vprop',  # Visialuzation properties
+                 'image_sh',  # External image: Shapely
+                 'image_pv',  # External image: Py-vista
+                 'image_vtk',  # External image: VTK
+                 'image_gmsh'  # External image: GMSH
+                 'mesh_lc',  # Target GMSH mesh size [Char. length]
                  )
 
     def __init__(self,
                  x: float = 0.0,
                  y: float = 0.0,
-                 lean: str = 'ignore',
-                 tdist: float = 1e-12,
-                 dim: int = 2,
-                 ptype: str = 'vt2dseed',
-                 jn: int = 3,
-                 loc: str = 'interior',
+                 lean: str = 'lowest',
+                 set_tdist: bool = True, tdist: float = 0.0000000000001,
+                 set_mid: bool = False,
+                 set_dim: bool = False, dim: int = 2,
+                 set_ptype: bool = False, ptype: str = 'vt2dseed',
+                 set_jn: bool = False, jn: int = 3,
+                 set_loc: bool = False, loc: str = 'interior',
                  store_original_coord: bool = False,
+                 set_mesh_lc: bool = False, mesh_lc=1.0,
+                 attach_mulpoints: bool = False, mulpoints=None,
+                 attach_edges: bool = False, edges=None,
+                 attach_muledges: bool = False, muledges=None,
+                 attach_xtals: bool = False, xtals=None,
+                 attach_polyxtals: bool = False, polyxtals=None,
+                 set_phase: bool = False,
                  phase_id: int = 1, phase_name: str = 'cucrzr',
-                 tcname: str = 'B',
-                 ea: list = [45, 35, 0],
+                 set_sfv_pol_area: bool = True, sfv_pol_area: float = 0.0,
+                 set_sfv_pol_perimeter: bool = True,
+                 sfv_pol_perimeter: float = 0.0,
+                 set_sfv_pol_aspect_ratio: bool = True,
+                 sfv_pol_aspect_ratio: float = 0.0,
+                 set_tcname: bool = False, tcname: str = 'B',
+                 set_sfv_ea: bool = True,
+                 sfv_repr_ea='Bunge', sfv_ea: list = [45, 35, 0],
+                 set_orientation_object: bool = True,
                  orientation_object: object = None,
+                 store_vis_prop: bool = False,
+                 make_image_sh: bool = True, image_sh=None,
+                 make_image_pv: bool = True, image_pv=None,
+                 make_image_vtk: bool = True, image_vtk=None,
+                 make_image_gmsh: bool = True, image_gmsh=None,
                  ):
         '''
         # TODO: Replace rare input arguments as kwargs
@@ -113,92 +136,143 @@ class point2d():
             @upxo, user: something which the user may also provide.
         '''
         self.x, self.y = float(x), float(y)
-        self.lean = lean  # FOR ABOVE LINE: self.set_lean(lean)
-        # --------------------------------------------------
-        if lean == 'ignore':
+        if lean.lower() in ('ignore', 0):
             '''Do everything possible'''
-            self.mid = id(self)  # FOR ABOVE LINE: self.make_mid()
-            self.tdist = tdist  # FOR ABOVE LINE: self.set_tdist(tdist)
-            self._original_location = (self.x, self.y)
-            self.state = {'loc': loc,  # self.set_location(loc=loc)
-                          'ptype': ptype,  # self.set_ptype(ptype=ptype)
-                          'jn': jn,  # self.set_jn(jn=jn)
-                          'angle': 0.0,  # Rotation about itself
-                          'phase_id': phase_id,  # See next comment
-                          'phase_name': phase_name,  # See next comment
-                          'tcname': tcname  # self.set_tcname(tcname)
-                          }
-            # self.set_phase(phase_id=phase_id, phase_name=phase_name)
-            self.links = {'me': [],  # Multi-edge objects
-                          }
-            self.data = {'mesh': {'lc': None,
-                                  },
-                         'sdv_gnd': [],  # Geo Necess Dislocation matrix
-                         'sdv_rss': [],  # Resolved shear stress
-                         'sdv_st': [],  # Schmidt tensor
-                         }
-        elif lean == 'low':
-            '''
-            Relative to lean = 'ignore', following holds:
-                no angle in self.state
-                no sdv related data im self.data
-            '''
-            self.mid = id(self)
-            self.tdist = tdist
-            self._original_location = (self.x, self.y)
-            self.state = {'loc': loc,
-                          'ptype': ptype,
-                          'jn': jn,
-                          'phase_id': phase_id,
-                          'phase_name': phase_name,
-                          'tcname': tcname
-                          }
-            self.links = {'me': [],
-                          }
-            self.data = {'mesh': {'lc': None,
-                                  },
-                         }
-        elif lean == 'medium':
-            '''
-            Relative to lean = 'ignore', following holds:
-                no angle in self.state
-                no sdv related data im self.data
-                no loc in self.state
-                no phase_name in self.state
-                no _original_location
-            '''
-            self.mid = id(self)
-            self.tdist = tdist
-            self.state = {'ptype': ptype,
-                          'jn': jn,
-                          'phase_id': phase_id,
-                          'tcname': tcname
-                          }
-            self.links = {'me': [],
-                          }
-            self.data = {'mesh': {'lc': None,
-                                  },
-                         }
-        elif lean == 'high':
-            '''
-            Relative to lean = 'ignore', following holds:
-                no angle in self.state
-                no sdv related data im self.data
-                no loc in self.state
-                no phase_name in self.state
-                no _original_location
-            '''
-            self.tdist = tdist
-            self.state = {'jn': jn,
-                          'phase_id': phase_id,  # See next comment
-                          'tcname': tcname
-                          }
-        elif lean == 'highest':
-            '''
-            Relative to lean = 'ignore', following holds:
-                no other slots assigned valus other than x, y, lean and tdist
-            '''
-            self.tdist = tdist
+            self.set_lean(lean)
+            self.make_mid()
+            self.set_dim()
+            self.set_tdist(tdist)
+            self.set_ptype(ptype=ptype)
+            self.set_jn(jn=jn)
+            self.set_location(loc=loc)
+            self.set_original_location()
+            self.set_phase(phase_id=phase_id, phase_name=phase_name)
+            self.set_sfv_pol_area(sfv_pol_area)
+            self.set_sfv_pol_perimeter(sfv_pol_perimeter)
+            self.set_tcname(tcname)
+            self.set_sfv_repr_ea(sfv_repr_ea)
+            self.set_sfv_ea(sfv_ea)
+            self.orientation_object = orientation_object
+            self.set_mesh_lc(mesh_lc)
+            self.vprop = self.set_vis_prop()
+            self.attach_mulpoints(mulpoints)
+            self.attach_edges(edges)
+            self.attach_muledges(muledges)
+            self.attach_xtals(xtals)
+            self.attach_polyxtals(polyxtals)
+            # self.make_partition(restart=False,
+            #                    saa=True,
+            #                    n=partition_n,
+            #                    char_lengths=partition_char_lengths,
+            #                    char_length_type=partition_char_length_type,
+            #                    make_polygon=partition_make_polygon,
+            #                    tool=partition_tool,
+            #                    rotation=partition_rotation,
+            #                    feed_partition=False,
+            #                    feed_partition_name='grain',
+            #                    feed_partition_tool='shapely',
+            #                    feed_partition_polygon=None
+            #                    )
+
+        if lean.lower() in ('no', 'notlean', 'not_lean', 'lowest'):
+            self.set_lean(lean)
+            if set_mesh_lc:
+                self.set_mesh_lc(mesh_lc)
+            if set_mid:
+                self.make_mid()
+            if set_tdist:
+                self.set_tdist()
+            if set_dim:
+                self.set_dim()
+            if set_ptype:
+                self.set_ptype(ptype=ptype)
+            if set_jn:
+                self.set_jn(jn=jn)
+            if set_loc:
+                self.set_location(loc=loc)
+            if store_original_coord:
+                self.set_original_location()
+            if attach_mulpoints:
+                self.attach_mulpoints(mulpoints)
+            if attach_edges:
+                self.attach_edges(edges)
+            if attach_muledges:
+                self.attach_muledges(muledges)
+            if attach_xtals:
+                self.attach_xtals(xtals)
+            if attach_polyxtals:
+                self.attach_polyxtals(polyxtals)
+            if set_phase:
+                self.set_phase(phase_id=phase_id, phase_name=phase_name)
+            if set_sfv_pol_area:
+                self.set_sfv_pol_area(sfv_pol_area)
+            if set_sfv_pol_perimeter:
+                self.set_sfv_pol_perimeter(sfv_pol_perimeter)
+            if set_tcname:
+                self.set_tcname(tcname)
+            if set_sfv_ea:
+                self.set_sfv_repr_ea(sfv_repr_ea)
+                self.set_sfv_ea(sfv_ea)
+            if set_orientation_object:
+                self.set_orientation_object(orientation_object)
+            if store_vis_prop:
+                self.vprop = self.set_vis_prop()
+
+        if lean in ('low'):
+            self.lean = lean
+            if set_mid:
+                self.make_mid()
+            if set_dim:
+                self.set_dim()
+            if set_ptype:
+                self.set_ptype(ptype=ptype)
+            if set_jn:
+                self.set_jn(jn=jn)
+            if set_loc:
+                self.set_location(loc=loc)
+            if store_original_coord:
+                self._original_location = (self.x, self.y)
+            if attach_mulpoints:
+                pass
+            if attach_edges:
+                pass
+            if attach_muledges:
+                pass
+            if attach_xtals:
+                pass
+            if attach_polyxtals:
+                pass
+            if attach_muledges:
+                pass
+            if attach_xtals:
+                pass
+            if attach_polyxtals:
+                pass
+            if set_phase:
+                self.set_phase(phase_id=phase_id, phase_name=phase_name)
+            if set_sfv_pol_area:
+                self.sfv_pol_area = sfv_pol_area
+            if set_tcname:
+                self.set_tcname(tcname)
+            if set_sfv_ea:
+                self.sfv_repr_ea = sfv_repr_ea
+                self.sfv_ea = [45, 35, 0]
+            if set_orientation_object:
+                self.orientation_object = orientation_object
+            if set_tdist:
+                self.tdist = tdist
+            if store_vis_prop:
+                self.vprop = self.set_vis_prop()
+
+        if lean.lower() in ('medium', 'intermediate'):
+            self.lean = lean
+
+        if lean.lower() in ('high'):
+            self.lean = lean
+
+        if lean.lower() in ('veryhigh', 'highest', 'very_high',
+                            'leanest', 'fuly_lean', 'leanfull'):
+            pass
 
     def __call__(self, x, y):
         '''Call point object instances like functions'''
@@ -208,8 +282,7 @@ class point2d():
                point_objects: list = None,
                tdist: float = 0.0,
                use_self_tdist: bool = True,
-               point_types: str = 'upxo',
-               edge_types: str = ''
+               point_type: str = 'upxo'
                ):
         '''Check if self is coincident with "point_objects" (see attr. below).
 
@@ -230,35 +303,25 @@ class point2d():
 
         Examples
         --------
-        >>> from point2d import point2d
+        >>> from upoint import point2d
         >>> p1 = point2d(x = 0.0, y = 0.0)
         '''
         if use_self_tdist:
             tdist = self.tdist
-        if point_types == 'upxo':
-            if isinstance(point_objects, point2d):
-                if self.distance(otype='point2d',
-                                 obj=point_objects) <= tdist:
-                    return True
-                else:
-                    return False
-            elif type(point_objects) in dth.dt.ITERABLES:
-                to_return = [False for pobjcount in range(len(point_objects))]
-                for pobjcount in range(len(point_objects)):
-                    if self.distance(otype='point2d',
-                                     obj=point_objects[pobjcount]) <= tdist:
-                        to_return[pobjcount] = True
-                return tuple(to_return)
+        if isinstance(point_objects, point2d):
+            if self.distance(other_object_type='point2d',
+                             point_data=point_objects) <= tdist:
+                return True
             else:
-                return 'ERROR: Only point2d instance or tuple of them allowed'
-        elif point_types == 'shapely':
-            pass
-        elif point_types == 'vtk':
-            pass
-        elif point_types == 'pyvista':
-            pass
-        elif point_types == 'gmsh':
-            pass
+                return False
+        elif isinstance(point_objects, list):
+            to_return = [False for pobjcount in range(len(point_objects))]
+            for pobjcount in range(len(point_objects)):
+                if self.distance(point_objects[pobjcount]) <= tdist:
+                    to_return[pobjcount] = True
+            return tuple(to_return)
+        else:
+            return 'ERROR: Only point2d instance or tuple of them allowed'
 
     def __ne__(self,
                point_objects=None,
@@ -290,303 +353,461 @@ class point2d():
         else:
             return 'ERROR: Only point2d instance or tuple of them allowed'
 
-    def __add__(self, k=0.0, saa=False, make_new=True, lean='ignore',
-                throw=True):
-        if isinstance(k, point2d):
-            if saa and make_new:  # \\\<---- 1
-                self.x += k.x
-                self.y += k.y
-                to_return = self.make_new(x=self.x,
-                                          y=self.y,
-                                          lean=lean)
-                to_return = (to_return, '[--parent also updated--]')
-            if saa and not make_new:  # <---- 2
-                self.x += k.x
-                self.y += k.y
-                to_return = '[--parent updated--]'
-            if not saa and make_new:  # \\\<---- 3
-                to_return = self.make_new(x=self.x+k.x,
-                                          y=self.y+k.y,
-                                          lean=lean)
-            if not saa and not make_new:  # \\\<---- 4
-                to_return = '[--saa FALSE make_nre FALSE--]'
-        if type(k) in dth.dt.NUMBERS:
-            if saa and make_new:  # \\\<---- 1
-                self.x += k
-                self.y += k
-                to_return = self.make_new(x=self.x,
-                                          y=self.y,
-                                          lean=lean)
-                to_return = (to_return, '[--parent also updated--]')
-            if saa and not make_new:  # \\\<---- 2
-                self.x += k
-                self.y += k
-                to_return = '[--parent updated--]'
-            if not saa and make_new:  # \\\<---- 3
-                to_return = self.make_new(x=self.x+k,
-                                          y=self.y+k,
-                                          lean=lean)
-            if not saa and not make_new:  # \\\<---- 4
-                to_return = '[--saa FALSE make_nre FALSE--]'
-        if type(k) in dth.dt.ITERABLES:
-            to_return = ()
-            for k_ in k:
-                if type(k_) in dth.dt.NUMBERS:
-                    to_return += (self.make_new(self.x+k_,
-                                                self.y+k_,
-                                                lean=lean),)
-                elif type(k_) in dth.dt.ITERABLES:
-                    this = ()
-                    for k__ in k_:
-                        if type(k__) in dth.dt.NUMBERS:
-                            this += (self.make_new(self.x+k__,
-                                                   self.y+k__,
-                                                   lean=lean),)
-                        elif isinstance(k__, point2d):
-                            this += (self.make_new(self.x+k__.x,
-                                                   self.y+k__.y,
-                                                   lean=lean),)
-                    to_return += (this,)
-                elif isinstance(k_, point2d):
-                    to_return += (self.make_new(self.x+k_.x,
-                                                self.y+k_.y,
-                                                lean=lean),)
-        if saa and self.__muledges__:
-            for me in self.__muledges__:
-                index = [*me.pmids].index(id(self))
-                me.clist[index] = [self.x, self.y]
-                me.mpoint.locx[index], me.mpoint.locy[index] = self.x, self.y
+    def above(self, point_objects):
+        """
+        Returns Truth array as per elements in point_objects.
+        True if other object is above, else False in any other case
 
-        if throw:
-            return to_return
+        Parameters
+        ----------
+        point_objects : point2d / shapely point / coord_xy list
+                       / coord_xy tuple
+            DESCRIPTION. An input set of points to compare against
 
-    def __sub__(self, k=0.0, saa=False, make_new=True, lean='ignore',
-                throw=True):
-        if isinstance(k, point2d):
-            if saa and make_new:  # \\\<---- 1
-                self.x -= k.x
-                self.y -= k.y
-                to_return = self.make_new(x=self.x,
-                                          y=self.y,
-                                          lean=lean)
-                to_return = (to_return, '[--parent also updated--]')
-            if saa and not make_new:  # <---- 2
-                self.x -= k.x
-                self.y -= k.y
-                to_return = '[--parent updated--]'
-            if not saa and make_new:  # \\\<---- 3
-                to_return = self.make_new(x=self.x-k.x,
-                                          y=self.y-k.y,
-                                          lean=lean)
-            if not saa and not make_new:  # \\\<---- 4
-                to_return = '[--saa FALSE make_nre FALSE--]'
-        if type(k) in dth.dt.NUMBERS:
-            if saa and make_new:  # \\\<---- 1
-                self.x -= k
-                self.y -= k
-                to_return = self.make_new(x=self.x,
-                                          y=self.y,
-                                          lean=lean)
-                to_return = (to_return, '[--parent also updated--]')
-            if saa and not make_new:  # \\\<---- 2
-                self.x -= k
-                self.y -= k
-                to_return = '[--parent updated--]'
-            if not saa and make_new:  # \\\<---- 3
-                to_return = self.make_new(x=self.x-k,
-                                          y=self.y-k,
-                                          lean=lean)
-            if not saa and not make_new:  # \\\<---- 4
-                to_return = '[--saa FALSE make_nre FALSE--]'
-        if type(k) in dth.dt.ITERABLES:
-            to_return = ()
-            for k_ in k:
-                if type(k_) in dth.dt.NUMBERS:
-                    to_return += (self.make_new(self.x-k_,
-                                                self.y-k_,
-                                                lean=lean),)
-                elif type(k_) in dth.dt.ITERABLES:
-                    this = ()
-                    for k__ in k_:
-                        if type(k__) in dth.dt.NUMBERS:
-                            this += (self.make_new(self.x-k__,
-                                                   self.y-k__,
-                                                   lean=lean),)
-                        elif isinstance(k__, point2d):
-                            this += (self.make_new(self.x-k__.x,
-                                                   self.y-k__.y,
-                                                   lean=lean),)
-                    to_return += (this,)
-                elif isinstance(k_, point2d):
-                    to_return += (self.make_new(self.x-k_.x,
-                                                self.y-k_.y,
-                                                lean=lean),)
-        if throw:
-            return to_return
+        Returns
+        -------
+        list of Boolean (truth values)
+        """
+        point_objects_coord_y = dth.point_list_to_coordxy(point_objects).T[1]
+        self_y = self.y + self.EPS_above
+        above_flags = list(point_objects_coord_y > self_y)
+        return above_flags
 
-    def __mul__(self, k=0.0, saa=False, make_new=True, lean='ignore',
-                throw=True):
-        if isinstance(k, point2d):
-            if saa and make_new:  # \\\<---- 1
-                self.x *= k.x
-                self.y *= k.y
-                to_return = self.make_new(x=self.x,
-                                          y=self.y,
-                                          lean=lean)
-                to_return = (to_return, '[--parent also updated--]')
-            if saa and not make_new:  # <---- 2
-                self.x *= k.x
-                self.y *= k.y
-                to_return = '[--parent updated--]'
-            if not saa and make_new:  # \\\<---- 3
-                to_return = self.make_new(x=self.x*k.x,
-                                          y=self.y*k.y,
-                                          lean=lean)
-            if not saa and not make_new:  # \\\<---- 4
-                to_return = '[--saa FALSE make_nre FALSE--]'
-        if type(k) in dth.dt.NUMBERS:
-            if saa and make_new:  # \\\<---- 1
-                self.x *= k
-                self.y *= k
-                to_return = self.make_new(x=self.x,
-                                          y=self.y,
-                                          lean=lean)
-                to_return = (to_return, '[--parent also updated--]')
-            if saa and not make_new:  # \\\<---- 2
-                self.x *= k
-                self.y *= k
-                to_return = '[--parent updated--]'
-            if not saa and make_new:  # \\\<---- 3
-                to_return = self.make_new(x=self.x*k,
-                                          y=self.y*k,
-                                          lean=lean)
-            if not saa and not make_new:  # \\\<---- 4
-                to_return = '[--saa FALSE make_nre FALSE--]'
-        if type(k) in dth.dt.ITERABLES:
-            to_return = ()
-            for k_ in k:
-                if type(k_) in dth.dt.NUMBERS:
-                    to_return += (self.make_new(self.x*k_,
-                                                self.y*k_,
-                                                lean=lean),)
-                elif type(k_) in dth.dt.ITERABLES:
-                    this = ()
-                    for k__ in k_:
-                        if type(k__) in dth.dt.NUMBERS:
-                            this += (self.make_new(self.x*k__,
-                                                   self.y*k__,
-                                                   lean=lean),)
-                        elif isinstance(k__, point2d):
-                            this += (self.make_new(self.x*k__.x,
-                                                   self.y*k__.y,
-                                                   lean=lean),)
-                    to_return += (this,)
-                elif isinstance(k_, point2d):
-                    to_return += (self.make_new(self.x*k_.x,
-                                                self.y*k_.y,
-                                                lean=lean),)
-        if throw:
-            return to_return
+    def below(self, point_objects):
+        """
+        Returns Truth array as per elements in point_objects.
+        True if other object is below, else False in any other case
 
-    def __truediv__(self, k=0.0, saa=False, make_new=True, lean='ignore',
-                    throw=True):
-        if isinstance(k, point2d):
-            if abs(k.x) >= 0.000000000001 and abs(k.y) >= 0.000000000001:
-                if saa and make_new:  # \\\<---- 1
-                    self.x /= k.x
-                    self.y /= k.y
-                    to_return = self.make_new(x=self.x,
-                                              y=self.y,
-                                              lean=lean)
-                    to_return = (to_return, '[--parent also updated--]')
-                if saa and not make_new:  # <---- 2
-                    self.x /= k.x
-                    self.y /= k.y
-                    to_return = '[--parent updated--]'
-                if not saa and make_new:  # \\\<---- 3
-                    to_return = self.make_new(x=self.x/k.x,
-                                              y=self.y/k.y,
-                                              lean=lean)
-                if not saa and not make_new:  # \\\<---- 4
-                    to_return = '[--saa FALSE make_new FALSE--]'
+        Parameters
+        ----------
+        point_objects : point2d / shapely point / coord_xy list
+                       / coord_xy tuple
+            DESCRIPTION. An input set of points to compare against
+
+        Returns
+        -------
+        list of Boolean (truth values)
+        """
+        point_objects_coord_y = dth.point_list_to_coordxy(point_objects).T[1]
+        self_y = self.y - self.EPS_above
+        below_flags = list(point_objects_coord_y < self_y)
+        return below_flags
+
+    def left(self, point_objects):
+        """
+        Returns Truth array as per elements in point_objects.
+        True if other object is to the left, else False in any other case
+
+        Parameters
+        ----------
+        point_objects : point2d / shapely point / coord_xy list
+                       / coord_xy tuple
+            DESCRIPTION. An input set of points to compare against
+
+        Returns
+        -------
+        list of Boolean (truth values)
+        """
+        point_objects_coord_x = dth.point_list_to_coordxy(point_objects).T[0]
+        self_x = self.x - self.EPS_above
+        left_flags = list(point_objects_coord_x < self_x)
+        return left_flags
+
+    def right(self, point_objects):
+        """
+        Returns Truth array as per elements in point_objects.
+        True if other object is to the right, else False in any other case
+
+        Parameters
+        ----------
+        point_objects : point2d / shapely point / coord_xy list
+                       / coord_xy tuple
+            DESCRIPTION. An input set of points to compare against
+
+        Returns
+        -------
+        list of Boolean (truth values)
+        """
+        point_objects_coord_x = dth.point_list_to_coordxy(point_objects).T[0]
+        self_x = self.x + self.EPS_above
+        right_flags = list(point_objects_coord_x > self_x)
+        return right_flags
+
+    def __add__(self, toadd=0.0, make_new=True):
+        """
+        CASE-1: if toadd is instance of point2d:
+            addition over fundamental axes lengths
+        CASE-2: if toadd is single scalar:
+            scalar added to both fundamental axes lengths
+        CASE-3: if toadd is two scalar element tuple:
+        CASE-3: if toadd is tuple of scalars or point2d objects:
+            scalar added to both fundamental axes lengths and a
+            tuple of point2d objects is returned. Element wise check
+            of scalar or point2d is carried out.
+        CASE-4: if toadd is a tuple of tuples, then the inner tuple,
+        in the form (x, y) is added to the x and y of self and the
+        corresponding point2d object is made and appended to tuple to
+        be returned.
+
+        make_new applies only to cases 1,2 and 3 of above 4 cases
+
+        RESTRICTIONS:
+            toadd: if not cases 1 and 2, toadd MUST be in tuple format
+
+        Parameters
+        ----------
+        toadd : TYPE, optional
+            DESCRIPTION. The default is 0.0.
+        make_new : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if isinstance(toadd, point2d):  # CASE-1
+            if make_new:
+                return self.make_new(self.x+toadd.x, self.y+toadd.y)
             else:
-                to_return = '[--Zero k ERR--]'
-        if type(k) in dth.dt.NUMBERS:
-            if abs(k) >= 0.000000000001:
-                if saa and make_new:  # \\\<---- 1
-                    self.x /= k
-                    self.y /= k
-                    to_return = self.make_new(x=self.x,
-                                              y=self.y,
-                                              lean=lean)
-                    to_return = (to_return, '[--parent also updated--]')
-                if saa and not make_new:  # \\\<---- 2
-                    self.x /= k
-                    self.y /= k
-                    to_return = '[--parent updated--]'
-                if not saa and make_new:  # \\\<---- 3
-                    to_return = self.make_new(x=self.x/k,
-                                              y=self.y/k,
-                                              lean=lean)
-                if not saa and not make_new:  # \\\<---- 4
-                    to_return = '[--saa FALSE make_nre FALSE--]'
+                self.x += toadd.x
+                self.y += toadd.y
+        if isinstance(toadd, (int, float)):
+            if make_new:
+                return self.make_new(self.x+toadd, self.y+toadd)
             else:
-                to_return = '[--Zero k ERR--]'
-        if type(k) in dth.dt.ITERABLES:
+                self.x += toadd
+                self.y += toadd
+        if isinstance(toadd, tuple):
             to_return = ()
-            for k_ in k:
-                if type(k_) in dth.dt.NUMBERS:
-                    if abs(k_) >= 0.000000000001:
-                        to_return += (self.make_new(self.x/k_,
-                                                    self.y/k_,
-                                                    lean=lean),)
-                    else:
-                        to_return += ('[--Zero k ERR--]',)
-                elif type(k_) in dth.dt.ITERABLES:
-                    this = ()
-                    for k__ in k_:
-                        if type(k__) in dth.dt.NUMBERS:
-                            if abs(k__) >= 0.000000000001:
-                                this += (self.make_new(self.x/k__,
-                                                       self.y/k__,
-                                                       lean=lean),)
-                            else:
-                                this += ('[--Zero k ERR--]',)
-                        elif isinstance(k__, point2d):
-                            if abs(k__.x) >= 0.000000000001 and abs(k__.y) >= 0.000000000001:
-                                this += (self.make_new(self.x/k__.x,
-                                                       self.y/k__.y,
-                                                       lean=lean),)
-                            else:
-                                this += ('[--Zero k ERR--]',)
-                    to_return += (this,)
-                elif isinstance(k_, point2d):
-                    if abs(k_.x) >= 0.000000000001 and abs(k_.y) >= 0.000000000001:
-                        to_return += (self.make_new(self.x/k_.x,
-                                                    self.y/k_.y,
-                                                    lean=lean),)
-                    else:
-                        to_return += ('[--Zero k ERR--]',)
-        if throw:
+            # count = 0
+            for toadd_ in toadd:
+                if isinstance(toadd_, (int, float)):
+                    to_return += (self.make_new(self.x+toadd_, self.y+toadd_),)
+                elif isinstance(toadd_, tuple):
+                    to_return += (self.make_new(self.x +
+                                  toadd_[0], self.y+toadd_[1]),)
+                elif isinstance(toadd_, point2d):
+                    to_return += (self.make_new(self.x +
+                                  toadd_.x, self.y+toadd_.y),)
             return to_return
 
-    def __abs__(self, saa=False, make_new=True, lean='ignore', throw=True):
-        if saa or make_new:
-            _x, _y = abs(self.x), abs(self.y)
-        if saa and make_new:
-            self.x, self.y = _x, _y
-            to_return = (self.make_new(x=_x, y=_y, lean='ignore'),
-                         '[--parent also updated--]')
-        if not saa and make_new:
-            to_return = self.make_new(x=_x, y=_y, lean='ignore')
-        if saa and not make_new:
-            self.x, self.y = _x, _y
-            to_return = '[--parent updated--]'
-        if not saa and not make_new:
-            to_return = '#- saa FALSE make_new FALSE -#'
-        if throw:
-            return to_return
+    def __sub__(self, tosub=0.0, make_new=True):
+        """
+        CASE-1: if tosub is instance of point2d:
+            addition over fundamental axes lengths
+        CASE-2: if tosub is single scalar:
+            scalar added to both fundamental axes lengths
+        CASE-3: if tosub is two scalar element tuple:
+        CASE-3: if tosub is tuple of scalars or point2d objects:
+            scalar added to both fundamental axes lengths and a
+            tuple of point2d objects is returned. Element wise check
+            of scalar or point2d is carried out.
+        CASE-4: if tosub is a tuple of tuples, then the inner tuple,
+        in the form (x, y) is added to the x and y of self and the
+        corresponding point2d object is made and appended to tuple to
+        be returned.
 
+        make_new applies only to cases 1,2 and 3 of above 4 cases
+
+        RESTRICTIONS:
+            tosub: if not cases 1 and 2, tosub MUST be in tuple format
+
+        Parameters
+        ----------
+        tosub : TYPE, optional
+            DESCRIPTION. The default is 0.0.
+        make_new : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if isinstance(tosub, point2d):  # CASE-1
+            if make_new:
+                return self.make_new(self.x-tosub.x, self.y-tosub.y)
+            else:
+                self.x -= tosub.x
+                self.y -= tosub.y
+        if isinstance(tosub, (int, float)):
+            if make_new:
+                return self.make_new(self.x-tosub, self.y-tosub)
+            else:
+                self.x -= tosub
+                self.y -= tosub
+        if isinstance(tosub, (list, tuple)):
+            to_return = ()
+            count = 0
+            for tosub_ in tosub:
+                if isinstance(tosub_, (int, float)):
+                    to_return += (self.make_new(self.x-tosub_, self.y-tosub_),)
+                elif isinstance(tosub_, tuple):
+                    to_return += (self.make_new(self.x -
+                                  tosub_[0], self.y-tosub_[1]),)
+                elif isinstance(tosub_, point2d):
+                    to_return += (self.make_new(self.x -
+                                  tosub_.x, self.y-tosub_.y),)
+                count += 1
+                if count == len(tosub):
+                    return to_return
+
+    def __mul__(self, multiplier, update=False, make_new=False, throw=True):
+        """
+
+
+        Parameters
+        ----------
+        multiplier : TYPE
+            DESCRIPTION.
+        update : TYPE, optional
+            DESCRIPTION. The default is False.
+        make_new : TYPE, optional
+            DESCRIPTION. The default is False.
+        throw : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if isinstance(multiplier, (int, float)):
+            if update and not make_new:
+                self.x *= multiplier
+                self.y *= multiplier
+                if throw:
+                    return self
+            if not update and make_new and throw:
+                return self.make_new(self.x*multiplier, self.y*multiplier)
+            if not (update and make_new) and throw:
+                return self.make_new(self.x*multiplier, self.y*multiplier)
+            if update and make_new:
+                self.x *= multiplier
+                self.y *= multiplier
+                return self.make_new(self.x, self.y)
+
+        elif isinstance(multiplier, (list, tuple)):
+            if update and not make_new:
+                self.x *= multiplier[0]
+                self.y *= multiplier[1]
+                if throw:
+                    return self
+            if not update and make_new and throw:
+                return self.make_new(self.x*multiplier[0],
+                                     self.y*multiplier[1])
+            if not (update and make_new) and throw:
+                return self.make_new(self.x*multiplier[0],
+                                     self.y*multiplier[1])
+            if update and make_new:
+                self.x *= multiplier[0]
+                self.y *= multiplier[1]
+                return self.make_new(self.x, self.y)
+        elif isinstance(multiplier, (point2d, Point)):
+            # point2d: upxo point object
+            # Point: shapely point object
+            if update and not make_new:
+                self.x *= multiplier.x
+                self.y *= multiplier.y
+                if throw:
+                    return self
+            if not update and make_new and throw:
+                return self.make_new(self.x*multiplier.x, self.y*multiplier.y)
+            if not (update and make_new) and throw:
+                return self.make_new(self.x*multiplier.x, self.y*multiplier.y)
+            if update and make_new:
+                self.x *= multiplier.x
+                self.y *= multiplier.y
+                return self.make_new(self.x, self.y)
+
+    def __truediv__(self, divisor, update=False, make_new=False, throw=True):
+        """
+
+
+        Parameters
+        ----------
+        divisor : TYPE
+            DESCRIPTION.
+        update : TYPE, optional
+            DESCRIPTION. The default is False.
+        make_new : TYPE, optional
+            DESCRIPTION. The default is False.
+        throw : TYPE, optional
+            DESCRIPTION. The default is True.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if isinstance(divisor, (float, int)):
+            if not divisor <= point2d.EPS_divisor:
+                if update and not make_new:
+                    self.x /= divisor
+                    self.y /= divisor
+                    if throw:
+                        return self
+                if not update and make_new and throw:
+                    return self.make_new(self.x/divisor, self.y/divisor)
+                if not (update and make_new) and throw:
+                    return self.make_new(self.x/divisor, self.y/divisor)
+                if update and make_new:
+                    self.x /= divisor
+                    self.y /= divisor
+                    return self.make_new(self.x, self.y)
+        elif isinstance(divisor, (list, tuple)):
+            if not (divisor[0] <= point2d.EPS_divisor
+                    and divisor[1] <= point2d.EPS_divisor):
+                if update and not make_new:
+                    self.x /= divisor[0]
+                    self.y /= divisor[1]
+                    if throw:
+                        return self
+                if not update and make_new and throw:
+                    return self.make_new(self.x/divisor[0], self.y/divisor[1])
+                if not (update and make_new) and throw:
+                    return self.make_new(self.x/divisor[0], self.y/divisor[1])
+                if update and make_new:
+                    self.x /= divisor[0]
+                    self.y /= divisor[1]
+                    return self.make_new(self.x, self.y)
+        elif isinstance(divisor, (point2d, Point)):
+            # point2d: upxo point object
+            # Point: shapely point object
+            if not (divisor.x <= point2d.EPS_divisor
+                    and divisor.y <= point2d.EPS_divisor):
+                if update and not make_new:
+                    self.x /= divisor.x
+                    self.y /= divisor.y
+                    if throw:
+                        return self
+                if not update and make_new and throw:
+                    return self.make_new(self.x/divisor.x, self.y/divisor.y)
+                if not (update and make_new) and throw:
+                    return self.make_new(self.x/divisor.x, self.y/divisor.y)
+                if update and make_new:
+                    self.x /= divisor.x
+                    self.y /= divisor.y
+                    return self.make_new(self.x, self.y)
+
+    def __abs__(self, saa=True, throw=True):
+        _x, _y = abs(self.x), abs(self.y)
+        if saa:
+            self.x, self.y = _x, _y
+        if throw:
+            return self
+
+    def __int__(self, saa=True, throw=False):
+        """
+        Explanations:
+            if saa and throw, then update and return new point2d
+            if saa and !throw, then update and don't return
+            if !saa and throw, then don't update and return
+            if !saa and !throw, then don't update and don't return
+        CALLS:
+            p2 = point2d(x = 8, y = 12)
+            p2.x = 8.456136
+            p2 # upxo.p2d(8.45614, 12.0)
+            p2.__int__(saa = False, throw = False)
+            p2.__int__(saa = False, throw = True) # upxo.p2d(8.0, 12.0)
+            p2 # upxo.p2d(8.45614, 12.0)
+            p2.__int__(saa = True, throw = False)
+            p2 # upxo.p2d(8, 12)
+            p2.x = 8.94321
+            p2 # upxo.p2d(8.94321, 12)
+            p2.__int__(saa = True, throw = True) # upxo.p2d(8, 12)
+
+        Parameters
+        ----------
+        saa : TYPE, optional
+            DESCRIPTION. The default is True.
+        throw : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if saa:
+            self.x, self.y = int(self.x), int(self.y)
+            if throw:
+                return self
+        else:
+            if throw:
+                return point2d(x=int(self.x), y=int(self.y))
+
+    def round_round(self, saa=False, throw=False):
+        """
+
+
+        Parameters
+        ----------
+        saa : TYPE, optional
+            DESCRIPTION. The default is False.
+        throw : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if saa:
+            self.x, self.y = round(self.x), round(self.y)
+        if throw:
+            return self
+
+    def round_ceil(self, saa=False, throw=False):
+        """
+
+
+        Parameters
+        ----------
+        saa : TYPE, optional
+            DESCRIPTION. The default is False.
+        throw : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if saa:
+            self.x, self.y = ceil(self.x), ceil(self.y)
+        if throw:
+            return self
+
+    def round_floor(self, saa=False, throw=False):
+        """
+
+
+        Parameters
+        ----------
+        saa : TYPE, optional
+            DESCRIPTION. The default is False.
+        throw : TYPE, optional
+            DESCRIPTION. The default is False.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        if saa:
+            self.x, self.y = floor(self.x), floor(self.y)
+        if throw:
+            return self
 
     def __repr__(self):
         """
@@ -600,6 +821,16 @@ class point2d():
         """
         return f'upxo.p2d({round(self.x, 8)}, {round(self.y, 8)})'
 
+    def make_mid(self):
+        """
+        assign_mid Assign the memory address id of self to self.mid
+
+        Returns
+        -------
+        None.
+
+        """
+        self.mid = id(self)
 
     @property
     def _status_(self):
@@ -607,39 +838,15 @@ class point2d():
         Status update to developer. Not aimed at users
         '''
         if self.has('mid'):
-            print('______________________________________')
-            print('*~~* POINT2D STATUS INFORMATION *~~* ')
-            print(' ')
-            print(f'      MID: {self.mid}')
-            print(f'      (X, Y): ({self.x}, {self.y})')
-            print(f'      LEAN: {self.lean}')
-            print('      \ \---------------------------')
-            if self.has('lean'):
-                if self.lean == 'ignore':
-                    print(f'      POINT TYPE:     {self.ptype}')
-                    print(f'      LOCATION:     {self.loc}')
-                    print(f'      TOLERANCE DISTANCE:     {self.tdist}')
-                    print(f'      JUNCTION ORDER:     {self.jn}')
-                    print(f'      PHASE ID:     {self.phase_id}')
-                    print('      \ \...........................')
-                    print(f'      Polygonal AREA:     {self.sfv_pol_area}')
-                    print(f'      Polygonal PERIMETER:     {self.sfv_pol_perimeter}')
-                    print(f'      Polygonal ASPECT RATIO:     {self.sfv_pol_ar}')
-                    print('      \ \...........................')
-                    print(f'      EULER ANGLE REPR.:     {self.sfv_repr_ea}')
-                    print(f'      EULER ANGLE:     {self.sfv_ea}')
-                    print('      \ \...........................')
-                    if self.has('orientation_object'):
-                        print('      Orientation object: YES')
-                    else:
-                        print('      Orientation object: NO')
-            print(' ')
-            print('*~~* POINT2D STATUS INFORMATION *~~* ')
-            print('______________________________________')
+            print('______________________________')
+            print('POINT2D STATUS INFORMATION')
+            print(f'    mid {self.mid}')
+            print(f'    (x, y) ({self.x}, {self.y})')
+            print(f'    lean {self.lean}')
+            print('______________________________')
         else:
             print('mid does not exist. It will be made now.')
-            # self.make_mid()
-            self.mid= id(self)
+            self.make_mid()
             self._status_
 
     def borrow_tdist(self, point_object=None):
@@ -674,45 +881,51 @@ class point2d():
             DESCRIPTION.
 
         """
-        suffix = suffix
-        if suffix in dth.opt.point2d_tdist:
+        suffix = suffix.lower()
+        if suffix in ('tdist', 'toldist', 'tolerance'):
             suffix = 'tdist'
-        elif suffix in dth.opt.point2d_jn:
+        elif suffix in ('jn', 'bjn', 'bj_n', 'j_n', 'jporder', 'xvo',
+                        'xtal_vertex_order'):
             suffix = 'jn'
-        elif suffix in dth.opt.point2d_ptype:
+        elif suffix in ('ptype', 'point_type'):
             suffix = 'ptype'
-        elif suffix in dth.opt.point2d_loc:
+        elif suffix in ('loc', 'pxtal_loc'):
             suffix = 'loc'
-        elif suffix in dth.opt.point2d_rid:
+        elif suffix in ('rid', 'randid', 'randomid', 'random_id'):
             suffix = 'rid'
-        elif suffix in dth.opt.point2d_mid:
+        elif suffix in ('mid', 'omid', 'memory_id', 'mem_id', 'memid',
+                        'object_memory_id'):
             suffix = 'mid'
-        elif suffix in dth.opt.point2d_dim:
+        elif suffix in ('dim', 'dimensionality'):
             suffix = 'dim'
-        elif suffix in dth.opt.point2d_pol_area:
+        elif suffix in ('sfv_pol_area', 'area'):
             suffix = 'sfv_pol_area'
-        elif suffix in dth.opt.point2d_pol_ar:
-            suffix = 'sfv_pol_ar'
-        elif suffix in dth.opt.point2d_pol_perimeter:
-            suffix = 'sfv_pol_perimeter'
-        elif suffix in dth.opt.point2d_pol_phaseid:
+        elif suffix in ('ar', 'aspect_ratio'):
+            suffix = 'ar'
+        elif suffix in ('phase_id', 'phase_id', 'phase_id_number'):
             suffix = 'phase_id'
-        elif suffix in dth.opt.point2d_pol_phasename:
+        elif suffix in ('phase_name', 'phasename', 'phase_name', 'phase'):
             suffix = 'phase_name'
-        elif suffix in dth.opt.point2d_pol_tcname:
+        elif suffix in ('tcname', 'texcomp', 'texture_component', 'ori_name',
+                        'oriname'):
             suffix = 'tcname'
-        elif suffix in dth.opt.point2d_pol_earepr:
+        elif suffix in ('eaunit', 'euler_angle_unit', 'eaunits',
+                        'euler_angle_units'):
+            suffix = 'eaunit'
+        elif suffix in ('sfv_repr_ea', 'repr_eulerangle', 'euler_ea', 'eatype',
+                        'ea_repr', 'ea_type', 'ea_representation'):
             suffix = 'sfv_repr_ea'
-        elif suffix in dth.opt.point2d_pol_eaunit:
-            suffix = 'sfv_eaunit'
-        elif suffix in dth.opt.point2d_pol_eangle:
-            suffix = 'sfv_eangle'
+        elif suffix in ('ea', 'ea_val', 'eaval', 'ea_value', 'eulerangle',
+                        'orientation'):
+            suffix = 'ea'
         has_truth = False
         if hasattr(self, suffix):
             has_truth = True
         return has_truth
 
-    def make_new(self, x=0.0, y=0.0, lean='low'):
+    def make_new(self, x=0.0, y=0.0, lean='low', set_mid=True, set_dim=True,
+                 set_ptype=False, store_original_coord=True,
+                 set_tdist=True, tdist=0.0000000000001, ):
         """
         Create a new point object.
 
@@ -745,7 +958,116 @@ class point2d():
             DESCRIPTION.
 
         """
-        return point2d(x=x, y=y, lean=lean)
+        return point2d(x=x, y=y, lean=lean, set_mid=set_mid,
+                       set_dim=set_dim, set_ptype=set_ptype,
+                       store_original_coord=store_original_coord,
+                       set_tdist=set_tdist, tdist=tdist,)
+
+    def negx(self):
+        """
+        Mirror about y-axis
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        self.x = -self.x
+        return self
+
+    def negy(self):
+        """
+        Mirror about x-axis
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        self.y = -self.y
+        return self
+
+    def negxy(self):
+        """
+        Mirror about y-axis and then about x-axis
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
+        """
+        self.x, self.y = -self.x, -self.y
+        return self
+
+    def displace_by(self, delx: float = 0.0, dely: float = 0.0,):
+        """
+        Move self by xdisp and ydisp
+
+        Parameters
+        ----------
+        delx : float, optional
+            DESCRIPTION. The default is 0.0.
+        dely : float, optional
+            DESCRIPTION. The default is 0.0.
+         : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.x, self.y = self.x + delx, self.y + dely
+
+    def move_to(self, xlocation: float = 0.0, ylocation: float = 0.0):
+        """
+        Move self to (locx, locy)
+
+        Parameters
+        ----------
+        xlocation : float, optional
+            DESCRIPTION. The default is 0.0.
+        ylocation : float, optional
+            DESCRIPTION. The default is 0.0.
+
+        Returns
+        -------
+        None.
+
+        """
+        self.x, self.y = xlocation, ylocation
+
+    def align_to(self, method='point2d', ref_point_object=None,
+                 xlocation: float = None, ylocation: float = None):
+        """
+        Align self to a new point
+
+        NOTE: This is akin to alignTo of vedo. See below.
+        https://vedo.embl.es/autodocs/content/vedo/pointcloud.html#vedo.pointcloud.Points
+
+        Parameters
+        ----------
+        method : TYPE, optional
+            DESCRIPTION. The default is 'point2d'.
+        ref_point_object : TYPE, optional
+            DESCRIPTION. The default is None.
+        xlocation : float, optional
+            DESCRIPTION. The default is None.
+        ylocation : float, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        None.
+
+        """
+        if method == 'point2d':
+            self.x, self.y = ref_point_object.x, ref_point_object.y
+        elif method == 'coord':
+            self.x, self.y = xlocation, ylocation
 
     def reset(self):
         """
@@ -756,10 +1078,13 @@ class point2d():
         None.
 
         """
-        if hasattr(self, '_original_location'):
-            self.x, self.y = self._original_location
+        if self.store_original_coord:
+            if hasattr(self, '_original_location'):
+                self.x, self.y = self._original_location
 
-    def LINK_mulpoint(self, mpo=None):
+    def attach_mulpoint(self,
+                        mulpointObject=None
+                        ):
         """
         Attach this object to a multi-point object
 
@@ -773,9 +1098,11 @@ class point2d():
         None.
 
         """
-        self._mulpoints_ = mpo
+        self._mulpoints_ = mulpointObject
 
-    def LINK_edge(self, eo=None):
+    def attach_edge(self,
+                    edgeObject=None
+                    ):
         """
         Attach this object to an edge object
 
@@ -789,10 +1116,12 @@ class point2d():
         None.
 
         """
-        self._edges_ = eo
+        self._edges_ = edgeObject
 
     def set_lean(self, lean):
         """
+
+
         Parameters
         ----------
         lean : TYPE
@@ -804,6 +1133,17 @@ class point2d():
 
         """
         self.lean = lean
+
+    def set_original_location(self):
+        """
+
+
+        Returns
+        -------
+        None.
+
+        """
+        self._original_location = (self.x, self.y)
 
     def set_dim(self, dim=2):
         """
@@ -819,7 +1159,17 @@ class point2d():
         None.
 
         """
-        self.dim = dim
+        try:
+            int(dim)
+        except:
+            if type(dim) != int:
+                print('value of dim MUST be a real number')
+        else:
+            _ = int(dim)
+            if _ == 2:
+                self.dim = _
+            else:
+                print('value of dim MUST be 2 @edge2d. Assigning dim = 2')
 
     def set_tdist(self, tdist=0.0):
         """
@@ -871,7 +1221,7 @@ class point2d():
         None.
 
         """
-        self._mulpoints_ = mulpoints
+        self.mulpoints = mulpoints
 
     def attach_edges(self, edges):
         """
@@ -971,7 +1321,7 @@ class point2d():
         """
         self.sfv_pol_perimeter = sfv_pol_perimeter
 
-    def set_sfv_pol_ar(self, value):
+    def set_sfv_pol_aspect_ratio(self, value):
         """
 
 
@@ -985,7 +1335,41 @@ class point2d():
         None.
 
         """
-        self.sfv_pol_ar = value
+        self.sfv_pol_aspect_ratio = value
+
+    def set_vis_prop(self,
+                     mtype='o',
+                     mew=1.0,
+                     mec='k',
+                     msz=10,
+                     mfill='w',
+                     malpha=1.0,
+                     bfill='teal',
+                     ):
+        """
+        set_marker_prop Set some properties of markers
+
+        Args:
+            mtype (str): marker type. Defaults to 'o'.
+            mew (float): marker edge width. Defaults to 1.0.
+            mec (str): marker edge colour. Defaults to 'k'.
+            msz (int): marker size. Defaults to 10.
+            mfill (str): marker fill. Defaults to 'w'.
+            malpha (float): marker alpha. Defaults to 1.0.
+            bfill (float): marker buffer fill. Defaults to 'teal'.
+
+        Returns:
+            dict: A dictionary of visualization parameters
+        """
+        vprop = {'mtype': mtype,
+                 'mew': mew,
+                 'mec': mec,
+                 'msz': msz,
+                 'mfill': mfill,
+                 'malpha': malpha,
+                 'bfill': bfill
+                 }
+        return vprop
 
     def set_mesh_lc(self,
                     mesh_lc=1.0
@@ -995,7 +1379,7 @@ class point2d():
         '''
         self.mesh_lc = mesh_lc
 
-    def make_shapely(self, saa=True, make_and_throw=False):
+    def make_shapely(self, saa=True, throw=False):
         """
         Returs an equivalent shapely point object
 
@@ -1004,32 +1388,37 @@ class point2d():
         shapely.geometry.point.Point object
             Shapely point object having the same x and y as self.x and self.y
         """
-        from shapely.geometry import Point
         _ = Point(self.x, self.y)
         if saa:
             self.image_sh = _
-        if make_and_throw:
+        if throw:
             return _
 
-    def make_vedo(self, saa=True, make_and_throw=False):
+    def make_vedo(self):
         """
         Make a vedo point object
         """
         pass
 
-    def make_pyvtk(self, saa=True, make_and_throw=False):
+    def make_vtk(self):
+        """
+        vtk Make VTK representation of the point object
+        """
+        pass
+
+    def make_pyvtk(self):
         """
         make a pyvtk object
         """
         pass
 
-    def make_paraview(self, saa=True, make_and_throw=False):
+    def make_paraview(self):
         """
         Make a paraview point object
         """
         pass
 
-    def make_gmsh(self, saa=True, make_and_throw=False):
+    def make_gmsh(self):
         """
         make a gmsh point object
 
@@ -1040,10 +1429,53 @@ class point2d():
         """
         pass
 
-    def make_pyvista(self, z=0.0):
+    def make_pyvista(self, z: float = 0.0,
+                     saa: bool = True,
+                     stf: bool = False,
+                     filename_base: str = 'image_pv.',
+                     file_format: str = 'vtk',
+                     attach_fields: bool = False,
+                     throw: bool = True,
+                     ):
+        """
+
+
+        Parameters
+        ----------
+        z : float, optional
+            DESCRIPTION. The default is 0.0.
+        saa : bool, optional
+            DESCRIPTION. The default is True.
+        stf : bool, optional
+            DESCRIPTION. The default is False.
+        filename_base : str, optional
+            DESCRIPTION. The default is 'image_pv.'.
+        file_format : str, optional
+            DESCRIPTION. The default is 'vtk'.
+        attach_fields : bool, optional
+            DESCRIPTION. The default is False.
+        throw : bool, optional
+            DESCRIPTION. The default is True.
+         : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        _pyvista_pset : TYPE
+            DESCRIPTION.
+
+        """
         import pyvista
-        return pyvista.PointSet(np.array([[self.x, self.y, z]],
-                                         dtype=np.float64))
+        _pyvista_pset = pyvista.PointSet(np.array([[self.x, self.y, z]],
+                                                  dtype=np.float64))
+        if stf:
+            filename = filename_base
+            + f'.upxo.p2d_{round(self.x, 3)}_{round(self.y, 3)}'
+            _pyvista_pset.save(filename=filename)
+        if saa:
+            self.image_pv = _pyvista_pset
+        if throw:
+            return _pyvista_pset
 
     def set_morph_curvature(self,
                             value: float = 0.0,
@@ -1201,137 +1633,367 @@ class point2d():
         """
         self.orientation_object = orientation_object
 
+    def make_partition(self,
+                       restart: bool = False,
+                       saa: bool = True,
+                       n: int = 4,
+                       char_lengths: list = [1.0],
+                       char_length_type: str = 'radius',
+                       make_polygon: bool = True,
+                       tool: str = 'shapely',
+                       rotation: float = 0,
+                       feed_partition=False,
+                       feed_partition_name='grain',
+                       feed_partition_tool='shapely',
+                       feed_partition_polygon=None,  # A shapely polygon object
+                       ):
+        """
+
+
+        Parameters
+        ----------
+        restart : bool, optional
+            DESCRIPTION. The default is False.
+        saa : bool, optional
+            DESCRIPTION. The default is True.
+        n : int, optional
+            DESCRIPTION. The default is 4.
+        char_lengths : list, optional
+            DESCRIPTION. The default is [1.0].
+        char_length_type : str, optional
+            DESCRIPTION. The default is 'radius'.
+        make_polygon : bool, optional
+            DESCRIPTION. The default is True.
+        tool : str, optional
+            DESCRIPTION. The default is 'shapely'.
+        rotation : float, optional
+            DESCRIPTION. The default is 0.
+        feed_partition : TYPE, optional
+            DESCRIPTION. The default is False.
+        feed_partition_name : TYPE, optional
+            DESCRIPTION. The default is 'grain'.
+        feed_partition_tool : TYPE, optional
+            DESCRIPTION. The default is 'shapely'.
+        feed_partition_polygon : TYPE, optional
+            DESCRIPTION. The default is None.
+        # A shapely polygon object : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        xy : TYPE
+            DESCRIPTION.
+
+        NOTES
+        -----
+            By default, self.x and self.y will be the centroid of the name
+            to be made.
+
+        EXAMPLE CALL
+        ------------
+            bo = NAME.make_partition(restart = False,
+                                  saa = True,
+                                  n = 4,
+                                  char_lengths = [1.0],
+                                  char_length_type = 'radius',
+                                  make_polygon = True,
+                                  tool = 'mpl',
+                                  rotation = 0,
+                                  feed_partition = False,
+                                  feed_partition_name = 'grain',
+                                  feed_partition_tool = 'shapely',
+                                  feed_partition_polygon = None
+                                  )
+        Include below in the above, if appropriate (which ever oe is)
+            name (str, optional): "closed"-name of the partition operation.
+            Defaults to 'square'.
+
+            auto_size (bool, optional): _description_. Defaults to True.
+
+            lengths (list, optional): list/tuple/numpy array of characteristic
+            lengths to make the name. Defaults to [1.0].
+
+            polygonize (bool, optional): If true, convert the name to UPXO
+            crystal2d object
+            If true, crystal2d will be returned
+            Note: This must not be saved to attribute. Defaults to False.
+
+            n (int): Number of points on continuous shapes like circle,
+            ellipse, etc
+
+            rotation (float):morphological rotation of the polygon, about
+            (self.x, self.y)
+        """
+        from dataclasses import dataclass, field
+
+        @dataclass(init=True, frozen=False, repr=True)
+        class partition_container():
+            '''
+            x: x-coordinate of the centre
+            y: y-coordinate of the centre
+            ns: list having Number of vertices
+            tools: list having tool requested/required/used
+            ppos: list having partition polygon objects
+            '''
+            x: float = field(default=None,
+                             repr=True,
+                             metadata={'unit': 'microns',
+                                       }
+                             )
+            y: float = field(default=None,
+                             repr=True,
+                             metadata={'unit': 'microns',
+                                       }
+                             )
+            names: list['str'] = field(default_factory=list, repr=True)
+            ns: list['str'] = field(default_factory=list, repr=True)
+            tools: list['str'] = field(default_factory=list, repr=True)
+            ppos: list['str'] = field(default_factory=list, repr=False)
+        # -----------------------
+        if (saa and (hasattr(self, 'partition') is False
+                     or restart)) or feed_partition:
+            self.partition = partition_container()
+        # -----------------------
+        if feed_partition is False:
+            if len(char_lengths) == 2 and char_lengths[0] != char_lengths[1]:
+                # RECTANGLE
+                delta_x, delta_y = 0.5*char_lengths[0], 0.5*char_lengths[1]
+                xminus, xplus, yminus, yplus = _x-delta_x, _x+delta_y, _y-delta_x, _y+delta_y
+                xy = [[xminus, yminus], [xplus, yminus],
+                      [xplus, yplus], [xminus, yplus]]
+            # ................
+            if len(char_lengths) == 1 or char_lengths[0] == char_lengths[1]:
+                # REGULAR POLYGONS
+                if char_length_type == 'side_length':
+                    # REF for converting side length to radius
+                    # https://www.mathopenref.com/polygonradius.html
+                    r = 0.5*char_lengths[0]/np.sin(3.141592653589793238/n)
+                elif char_length_type == 'radius':
+                    r = char_lengths[0]
+                # .. .. .. .. .. .. ..
+                ''' @DEV
+                n = 5
+                side_length = 1
+                r = 0.5*side_length/np.sin(3.141592653589793238/n)
+                #=================
+                from matplotlib.patches import RegularPolygon as rp
+                _mpl = rp((0, 0), numVertices = n, radius = r,
+                          orientation = np.radians(45))
+                xy1 = np.round(_mpl.get_verts(), 10)[:-1]
+                from shapely.geometry import Polygon
+                a = Polygon(xy1)
+                #=================
+                import matplotlib.pyplot as plt
+                fig = plt.figure(figsize = (1.6, 1.6), dpi = 100)
+                plt.fill(xy1.T[0],
+                         xy1.T[1],
+                         color = 'red',
+                         alpha = 1.0,
+                         edgecolor = 'black',
+                         )
+                plt.show()
+                '''
+                from matplotlib.patches import RegularPolygon as rp
+                # make the matplotlib patch object and extract its vertices
+                # print('#####################')
+                # print(rotation)
+                # print('#####################')
+                _center = (self.x, self.y)
+                _mpl_po = rp(_center,
+                             numVertices=n,
+                             radius=r,
+                             orientation=np.radians(rotation)
+                             )
+                xy = _mpl_po.get_verts()
+                xy = np.round(xy, point2d.ROUND_ZERO_DEC_PLACE)[:-1]
+                # from shapely.geometry import Polygon as shpol
+                # from shapely import affinity
+                # rot_shpol = affinity.rotate(shpol(xy), 45, 'center')
+                # xy = rot_shpol.boundary.coords.xy
+                # np.c_[np.array(list(xy[0])), np.array(list(xy[1]))][:-1]
+            # ................
+            if make_polygon:
+                # EXTRACT THE bpo: partition polygon object
+                if tool == 'mpl':
+                    ppo = _mpl_po
+                elif tool == 'shapely':
+                    from shapely.geometry import Polygon
+                    ppo = Polygon(xy)  # Buffer Polygon Object
+                elif tool == 'upxo':
+                    pass
+        # -----------------------
+        if saa:
+            self.partition.x = self.x
+            self.partition.y = self.y
+            if feed_partition is False:
+                self.partition.ns.append(n)
+                self.partition.names.append('')
+                self.partition.tools.append(tool)
+                self.partition.ppos.append(ppo)
+            elif feed_partition:
+                self.partition.x = self.x
+                self.partition.y = self.y
+                self.partition.names.append(feed_partition_name)
+                if partition_tool == 'shapely':
+                    # IGNORES THE HOLES IN THE POLYGON
+                    # TODO: This is a to be done in the future
+                    self.partition.ns.append(
+                        len(feed_partition_polygon.boundary.coords.xy[0])-1)
+                self.partition.tools.append(feed_partition_tool)
+                self.partition.ppos.append(feed_partition_polygon)
+        else:
+            return xy
+
     def plot(self, dpi=50, point: bool = True,
              buffer: bool = True, vprop=None,):
         # -------------------------
         if vprop is None:
-            vprop = point.set_vis_prop()
+            vprop = self.set_vis_prop()
         # -------------------------
         if point or buffer:
             fig = plt.figure(figsize=(1.6, 1.6), dpi=dpi)
             ax = fig.add_axes([0, 0, 1, 1])
         # -------------------------
         if point:
-            ax.plot(self.x, self.y)
+            ax.plot(self.x, self.y,
+                    marker=vprop['mtype'],
+                    markeredgewidth=vprop['mew'],
+                    markeredgecolor=vprop['mec'],
+                    markersize=vprop['msz'],
+                    markerfacecolor=vprop['mfill'],
+                    alpha=vprop['malpha']
+                    )
             plt.show()
         # -------------------------
         if buffer:
             pass
 
-    def distance(self, otype='point2d', obj=None, cor=0.1, nworkers=1):
+    def distance(self, other_object_type='point2d', point_data=None):
         """
-        1. Single UPXO point2d object - DONE
-        2. List of upxo point2d objects - DONE
-        3. A single coordinate pair of point2d - DONE
-        4. List of x coordinates and y coordinates - DONE
+        Calculate distance from self to another point(s)
+
+        In all examples below, the following are understood appropriately
+            from point2d_04 import point2d
+            from mulpoint2d_3 import mulpoint2d
+
+        Parameters
+        ----------
+        other_object_type : TYPE, optional
+            DESCRIPTION. The default is 'point2d'.
+        point_data : TYPE, optional
+            DESCRIPTION. The default is None.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
         """
         # ................
-        # 1. Single UPXO point2d object - DONE
-        # obj: UPXO point2d object
-        if otype in dth.opt.upxo_point2d:
+        if other_object_type in ('upxo_point1d', 'point1d', 'p1d'):
+            pass
+        # ................
+        if other_object_type in ('upxo_point1d_list', 'point1d_list',
+                                 'p1dlist', 'p1d_list'):
+            pass
+        # ................
+        if other_object_type in ('upxo_point2d', 'point2d', 'p2d'):
             '''
             Explanations:
                 1. Use this when distances are to be computed against
                 another point2d object
-                2. INPUT TYPE of "obj": UPXO.point2d object
+                2. INPUT TYPE of "point_data": UPXO.point2d object
 
             Example 1: Point to point
                 p1, p2 = point2d(x = 0, y = 0), point2d(x = 1, y = 1)
-                p1.distance(otype = 'point2d', obj = p2)
+                p1.distance(other_object_type = 'point2d', point_data = p2)
+                p2.distance(other_object_type = 'point2d', point_data = p2)
 
             Example 2: Point to a list of points (method - 1)
                 Not preferred, as there is a simpler method available under
                 case 'point2d_list'
                 x, y = list(range(0, 10, 2)), list(range(0, 20, 4))
                 p = [point2d(x = _x, y = _y) for _x, _y in zip(x, y)]
-                d = [p1.distance(otype = 'point2d',
-                                 obj = pi) for pi in p]
+                d = [p1.distance(other_object_type = 'point2d',
+                                 point_data = pi) for pi in p]
             '''
-            return np.sqrt((self.x-obj.x)**2 + (self.y-obj.y)**2)
+            return np.sqrt((self.x-point_data.x)**2
+                           + (self.y-point_data.y)**2)
         # ................
-        # 2. List of upxo point2d objects - DONE
-        # obj: list of point2d objects
-        if otype in dth.opt.upxo_point2d_list:
+        if other_object_type in ('upxo_point2d_list', 'point2d_list',
+                                 'p2dlist', 'p2d_list'):
             '''
             Explanations:
                 1. Use this when distances are to be computed against a list
                 of point2d objects
-                2. INPUT TYPE of "obj": list
+                2. INPUT TYPE of "point_data": list
 
             Example 1: Point to list of points
                 p1 = point2d(x = 0, y = 0)
                 p2 = point2d(x = 1, y = 1)
-                p1.distance(otype = 'up2dlist',
-                            obj = [p1, p2])
+                p1.distance(other_object_type = 'point2d_list',
+                            point_data = [p1, p2])
 
             Example 2: Point to list of points
             '''
-            x, y = zip(*[(_.x, _.y) for _ in obj])
-            return np.sqrt((self.x-np.array(x))**2 + (self.y-np.array(y))**2)
+            _x, _y, array = deepcopy(self.x), deepcopy(self.y), np.array
+            x, y = zip(*[(pi.x, pi.y) for pi in point_data])
+            return np.sqrt((_x-array(x))**2 + (_y-array(y))**2)
         # ................
-        # 3. Coordinate pair of a single point2d - DONE
-        # obj: coordinate
-        if otype in dth.opt.coord_point2d or otype in dth.opt.coord_pair_point2d:
+        if other_object_type in ('xy_coord_list', 'coord_lists',
+                                 'coord_list', 'clists', 'clists'):
             '''
-            # INPUT: a list / tuple of two float / int coordinates
-            # EXAMPLE INPUT: (x0, y0)
-
-            p = point2d(x = 0, y = 0)
-            print(p.distance(otype = 'coord2d', obj = (10, 10)))
-            '''
-            return np.sqrt((self.x-obj[0])**2 + (self.y-obj[1])**2)
-        # ................
-        # 4. List of x coordinates and y coordinates - DONE
-        # obj: list of lists of x and y coordinates
-        if otype in dth.opt.coord_point2d_list:
-            '''
-            INPUT: a list/tuple of two lists/tuples. Each of the two
-            inner lists/tuples contain the list of coordinate values
-            EXAMPLE INPUT: ((x0, x1, x2,...), (y0, y1, y2,...))
+            Exaplantions:
+                1. Use this when distances are to be computed againt a
+                list of coordinates
+                2. INPUT TYPE of "point_data": [[x1, x2, ..., xn],
+                                                [y1, y2, ..., yn]]
 
             Example 1: Point to list of x and y coordinate list
-                p = point2d(x = -2, y = 0)
-                obj = [[-2, -1, -0, 1, 2], [0, 0, 0, 0, 0]]
-                d = p.distance(otype = 'xy_list', obj = obj)
+                p = point2d(x = 0, y = 0)
+                point_data = [[0, 1, 2], [0, 1, 2]]
+                d = p.distance(other_object_type = 'xy_coord_list',
+                               point_data = point_data)
             '''
-            return np.sqrt((self.x-np.array(obj[0]))**2
-                           + (self.y-np.array(obj[1]))**2)
+            _x, _y, array = deepcopy(self.x), deepcopy(self.y), np.array
+            return np.sqrt((_x-array(point_data[0]))**2
+                           + (_y-array(point_data[1]))**2)
         # ................
-        # 5. List of coordinate pairs of point2d objects - DONE
-        # obj: list of lists of x-y coordinate pairs
-        if otype in dth.opt.coord_pairs_point2d_list:
-            # INPUT: a list/tuple of numerous lists/tuples. Each of the
-            # many lists/tuples contain coordinates of a point
-            # EXAMPLE INPUT: ((x0, y0), (x1, y1), (x2, y2),....)
-            obj = np.array(obj).T
-            return np.sqrt((self.x-obj[0])**2 + (self.y-obj[1])**2)
+        if other_object_type in ('xy_coord_pairs', 'coord_pairs',
+                                 'coord_pair', 'cpairs', 'cpair'):
+            '''
+            Exaplantions:
+                1. Use this when distances are to be computed against a list
+                of coordinate pairs
+                2. INPUT TYPE of "point_data": [ [x1, y1], [x2, y2]]
+
+            Example 1: Point to list of [x, y] coordinate pairs
+                p = point2d()
+                point_data = [[0, 0], [1, 1], [2, 2]]
+                d = p.distance(other_object_type = 'xy_coord_pairs',
+                               point_data = point_data)
+            '''
+            point_data = np.array(point_data).T
+            return np.sqrt((self.x-point_data[0])**2
+                           + (self.y-point_data[1])**2)
         # ................
-        # 6. A list of cKDTree objects - DONE
-        # obj: list of ckdtree objects
-        if otype in dth.opt.ckdtree_lists:
-            _, distances, _, _ = dth.find_neighdata_ckdt_list(self.x,
-                                                              self.y,
-                                                              obj,
-                                                              cor,
-                                                              nworkers)
-            return distances
+        if other_object_type == 'upxo_point3d':
+            pass
         # ................
-        # 7. A list of shapely point objects
+        if other_object_type == 'upxo_mulpoint1d':
+            pass
         # ................
-        # 8. A list of vtk point objects
-        # ................
-        # 9. A list of pyvista point objects
-        # ................
-        # 10. A single OR list of UPXO multi-point2d objects
-        if otype in dth.opt.upxo_mp2d_list:
+        if other_object_type in ('upxo_mulpoint2d', 'mp2d', 'mulpoint2d'):
             '''
             Explanations:
                 1. Use this when computimng distance sgainst a set of point2d
-                   objects contained inside list of mulpoint2d objects
-                2. INPUT TYPE of "obj": [upxo point object 1,
-                                         upxo point object 2,
-                                         ...,
-                                         upxo point object n]
+                   objects contained inside a mulpoint2d object(m).
+                   PSEUDO CODE:
+                       distance(self: point object, m.points: list)
+                2. INPUT TYPE of "point_data": [upxo point object 1,
+                                                upxo point object 2,
+                                                ...,
+                                                upxo point object n]
 
             Example 1:
                 # Create the reference point2d object
@@ -1342,58 +2004,39 @@ class point2d():
                     p2 = p1 + 1
                     p3 = p2 * 0.6498
                     p4 = p1*0.468 + p3/p2
-                    m1 = mulpoint2d(method = 'up2d_list',
+                    m1 = mulpoint2d(method = 'points',
                                     point_objects = [p1, p2, p3, p1 + p4*p1])
 
                 # Calculate distance
-                    d = p0.distance(otype = 'ump2d_list',
-                                    obj = [m1, m1])
-            '''
-            _depack_ = False
-            if str(obj.__class__.__name__) == 'mulpoint2d':
-                # If user enters a single mul-point object, make list
-                obj, _depack_ = [obj], True
-            _x, _y, distances = self.x, self.y, []
-            for mp in obj:
-                distances.append(np.sqrt((_x-mp.locx)**2
-                                         + (_y-mp.locy)**2)
-                                 )
-            if _depack_:
-                distances = distances[0]
-
-            return distances
+                    d = p0.distance(other_object_type = 'mulpoint2d',
+                                    point_data = m1)
+                '''
+            return self.distance(other_object_type='point2d_list',
+                                 point_data=point_data.points)
         # ................
-        # 11. A list of shapely mulobject objects (each made of points)
-        # ...............
-        # A single UPXO mulpoint3d objects
-        if otype == 'upxo_mulpoint3d':
+        if other_object_type == 'upxo_mulpoint3d':
             pass
         # ................
-        # A single edge2d object
-        if otype == 'upxo_edge2d':
+        if other_object_type == 'upxo_edge2d':
             pass
         # ................
-        # A list of edge2d objects
-        if otype == 'upxo_edge2d':
+        if other_object_type in ('upxo_muledge2d', 'upxo_ring2d'):
             pass
         # ................
-        if otype in ('upxo_muledge2d', 'upxo_ring2d'):
+        if other_object_type == 'upxo_edge3d':
             pass
         # ................
-        if otype == 'upxo_edge3d':
+        if other_object_type in ('upxo_muledge3d', 'upxo_ring3d'):
             pass
         # ................
-        if otype in ('upxo_muledge3d', 'upxo_ring3d'):
-            pass
-        # ................
-        if otype == 'shapely_xtal2d_centroid':
+        if other_object_type == 'shapely_xtal2d_centroid':
             '''
             Explanations:
                 1. Use this to find distance between self and centroid
                    of the shapely polygon object
-                2. INPUT TYPE of "obj": a valid shapely polygon object
+                2. INPUT TYPE of "point_data": a valid shapely polygon object
                 3. Centroidal x and y of polygon object will be used as
-                   obj = [[x], [y]]
+                   point_data = [[x], [y]]
 
             Example 1:
                 from point2d_04 import point2d
@@ -1401,18 +2044,18 @@ class point2d():
                 from shapely.geometry import Polygon
                 shapelypol = Polygon([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]])
 
-                p0.distance(otype = 'shapely_xtal2d_centroid',
-                            obj = shapelypol)
+                p0.distance(other_object_type = 'shapely_xtal2d_centroid',
+                            point_data = shapelypol)
             '''
-            centroid = obj.centroid
-            return self.distance(otype='coord_list',
-                                 obj=[[centroid.x], [centroid.y]])[0]
-        if otype == 'shapely_xtal2dlist_centroid':
+            centroid = point_data.centroid
+            return self.distance(other_object_type='coord_list',
+                                 point_data=[[centroid.x], [centroid.y]])[0]
+        if other_object_type == 'shapely_xtal2dlist_centroid':
             '''
             Explanations:
                 1. Use this to find distance between self and centroids of a
                    list of shapely polygon objects
-                2. INPUT TYPE of "obj": list of valid shapely polygon
+                2. INPUT TYPE of "point_data": list of valid shapely polygon
                    objects
 
             Example 1:
@@ -1422,22 +2065,22 @@ class point2d():
                 shapelypol1 = Polygon([[0,0], [1,0], [1,1], [0,1], [0,0]])
                 shapelypol2 = Polygon([[1,1], [2,1], [2,2], [1,2], [1,1]])
 
-                obj = [shapelypol1, shapelypol2]
-                p0.distance(otype = 'shapely_xtal2dlist_centroid',
-                            obj = obj)
+                point_data = [shapelypol1, shapelypol2]
+                p0.distance(other_object_type = 'shapely_xtal2dlist_centroid',
+                            point_data = point_data)
             '''
-            centroids = [[_.centroid.x, _.centroid.y] for _ in obj]
-            return self.distance(otype='coord_pairs',
-                                 obj=centroids)
+            centroids = [[_.centroid.x, _.centroid.y] for _ in point_data]
+            return self.distance(other_object_type='coord_pairs',
+                                 point_data=centroids)
 
-        if otype == 'shapely_xtal2d_reppoint':
+        if other_object_type == 'shapely_xtal2d_reppoint':
             '''
             Explanations:
                 1. Use this to find distance between self and reppoint of the
                    shapely polygon object
-                2. INPUT TYPE of "obj": a valid shapely polygon object
+                2. INPUT TYPE of "point_data": a valid shapely polygon object
                 3. centroidal x and y of polygon object will be used as
-                   obj = [[x], [y]]
+                   point_data = [[x], [y]]
 
             Example 1:
                 from point2d_04 import point2d
@@ -1445,18 +2088,18 @@ class point2d():
                 from shapely.geometry import Polygon
                 shapelypol = Polygon([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]])
 
-                p0.distance(otype = 'shapely_xtal2d_reppoint',
-                            obj = shapelypol)
+                p0.distance(other_object_type = 'shapely_xtal2d_reppoint',
+                            point_data = shapelypol)
             '''
-            reppoint = obj.representative_point()
-            return self.distance(otype='coord_list',
-                                 obj=[[reppoint.x], [reppoint.y]])[0]
-        if otype == 'shapely_xtal2dlist_reppoint':
+            reppoint = point_data.representative_point()
+            return self.distance(other_object_type='coord_list',
+                                 point_data=[[reppoint.x], [reppoint.y]])[0]
+        if other_object_type == 'shapely_xtal2dlist_reppoint':
             '''
             Explanations:
                 1. Use this to find distance between self and reppoints of a
                    list of shapely polygon objects
-                2. INPUT TYPE of "obj": list of valid shapely polygon
+                2. INPUT TYPE of "point_data": list of valid shapely polygon
                    objects
 
             Example 1:
@@ -1466,280 +2109,577 @@ class point2d():
                 shapelypol1 = Polygon([[0,0], [1,0], [1,1], [0,1], [0,0]])
                 shapelypol2 = Polygon([[1,1], [2,1], [2,2], [1,2], [1,1]])
 
-                obj = [shapelypol1, shapelypol2]
-                p0.distance(otype = 'shapely_xtal2dlist_reppoint',
-                            obj = obj)
+                point_data = [shapelypol1, shapelypol2]
+                p0.distance(other_object_type = 'shapely_xtal2dlist_reppoint',
+                            point_data = point_data)
             '''
             reppoints = [[_.representative_point().x,
-                          _.representative_point().y] for _ in obj]
-            return self.distance(otype='coord_pairs',
-                                 obj=reppoints)
+                          _.representative_point().y] for _ in point_data]
+            return self.distance(other_object_type='coord_pairs',
+                                 point_data=reppoints)
         # ................
-        if otype == 'upxo_xtal2d_reppoint':
-            # here obj will be the xtal containing the representative
+        if other_object_type == 'upxo_xtal2d_reppoint':
+            # here point_data will be the xtal containing the representative
             # point
             # representative point has to be UPXO point2d object
-            return self.distance(otype='upxo_point2d',
-                                 obj=obj.reppoint)
-        if otype == 'upxo_xtal2dlist_reppoint':
+            return self.distance(other_object_type='upxo_point2d',
+                                 point_data=point_data.reppoint)
+        if other_object_type == 'upxo_xtal2dlist_reppoint':
             # This is to call self.distance operating on case
             # 'upxo_xtal2d_reppoint'
-            return [self.distance(otype='upxo_xtal2d_reppoint',
-                                  obj=_obj)
-                    for _obj in obj]
+            return [self.distance(other_object_type='upxo_xtal2d_reppoint',
+                                  point_data=_point_data)
+                    for _point_data in point_data]
         # ................
-        if otype == 'upxo_xtal2d_vertices':
+        if other_object_type == 'upxo_xtal2d_vertices':
             # This is to call self.distance operating on case
             # 'upxo_xtal2d_reppoint'
             pass
         # ................
-        if otype == 'upxo_xtal3d_centroid':
+        if other_object_type == 'upxo_xtal3d_centroid':
             pass
         # ................
-        if otype == 'upxo_xtal3d_reppoint':
+        if other_object_type == 'upxo_xtal3d_reppoint':
             pass
         # ................
-        if otype == 'upxo_xtal3d_vertices':
+        if other_object_type == 'upxo_xtal3d_vertices':
             pass
         # ................
-        if otype == 'shapely_point':
+        if other_object_type == 'shapely_point':
             pass
         # ................
-        if otype == 'vtk_point':
+        if other_object_type == 'vtk_point':
             pass
         # ................
-        if obj is None:
+        if other_object_type in ('scipy_ckdtree', 'scipy_tree',
+                                 'tree', 'ckdrtee', 'ckdt'):
+            pass
+        if point_data is None:
             print('Need other object to compute distance(s)')
 
-    def neigh(self,
-              otype='points2d', obj=None,
-              cos='circle', cor=1.0, CMPOP='<',
-              nckdt_workers=1
-              ):
+    def proximity(self, other_data_type='mulpoint2d',
+                  point=None, point_coord=None, point_list=None,
+                  locx=None, locy=None, locxy=None,
+                  m=None, m_list=None,
+                  tree=None, xtal_feature='reppoints',
+                  xtal=None, xtal_list=None,
+                  pxtal=None, pxtal_list=None,
+                  ):
         """
-        #######################################---------------
-            PRE-REQUISITE DATA FOR EXAMPLES
-        p1, p2 = point2d(x=-2, y=0), point2d(x=-1, y=0)
-        p3, p4 = point2d(x=+0, y=0), point2d(x=+1, y=0)
-        p5 = point2d(x=+2, y=0)
-        #-------------------
-        # example data - 1
-        points_upxo= ([p1, p2, p3, p4, p5],
-                      [p1.yadd(1),p2.yadd(1),p3.yadd(1),p4.yadd(1),p5.yadd(1)],
-                      [p1.yadd(2),p2.yadd(2),p3.yadd(2),p4.yadd(2),p5.yadd(2)]
-                     )
-        #-------------------
-        # example data - 2
-        points_list_coord = ([[-2,-1,0,1,2], [0,0,0,0,0]],
-                             [[-2,-1,0,1,2], [1,1,1,1,1]],
-                             [[-2,-1,0,1,2], [2,2,2,2,2]]
-                            )
-        #-------------------
-        # example data = 3
-        points_coord_list = ([[-2,0],[-1,0],[0,0],[1,0],[2,0]],
-                             [[-2,1],[-1,1],[0,1],[1,1],[2,1]],
-                             [[-2,2],[-1,2],[0,2],[1,2],[2,2]],
-                             )
-        #-------------------
-        # example data = 4
-        n, nsets, = 5, 2
-        points = [dth.make_upxo_point2d_RANDU(n) for _ in range(nsets)]
-        cut_off_radii = [0.25, 0.50]
-        #######################################---------------
-        NOTE: both lists or tuples for obj will work
-        #######################################---------------
-                    LIST OF CASES
-        CASE 01: list of list of UPXO point2d objects (see example data-1)
-        CASE 02: list of list of coordinates of points (see example data-2)
-        CASE 03: list of list of coordinate pairs (see example data-3)
-        CASE 04: list of ckdtrees
-        #######################################---------------
-         OPTIONS FOR BRANCHING SEARCH STRINGS
-        CASE 01: dth.opt.upxo_point2d_list
-                 ['upxo_point2d_list', 'point2d_list', 'p2d_list',
-                  'p2dlist', 'p2list', 'points2d']
+        CORE FEATURE OF POINT2D CLASS AND POINT3D CLASS
 
-        CASE 02: dth.opt.coord_point2d_list
-                ['point_coord_2d_list', 'point_coord_2d_list',
-                 'coord2d_list', 'xy_coord_list', 'xy_list',
-                 'coord_lists', 'coord_list', 'clists', 'clists']
+        NOTE: This is to call self.distance with appropriate arguments
 
-        CASE 03: dth.opt.coord_pairs_point2d_list
-                ['xy_coord_pairs_list']
-        #######################################---------------
-        [Number ** 2 for list in Numbers for Number in list]
-        #######################################---------------
+        Exaplantoins:
+            1. Calculates the objects within the user specified cor
+               ('Cut-Off-Radius')
+            2. Objects could be:
+                a. list of point2d objects
+                b. list of mulpoint objects
+                c. list of list of xcoordinates and list of list of
+                   ycoordinates
+                d. list of list of xy coordinate pairs
+                e. list of trees (ckd-tree)
+                f. list of xtals
+                g. list of pxtals
+
+        Parameters
+        ----------
+        other_data_type : TYPE, optional
+            DESCRIPTION. The default is 'mulpoint2d'.
+        point : TYPE, optional
+            DESCRIPTION. The default is None.
+        point_coord : TYPE, optional
+            DESCRIPTION. The default is None.
+        point_list : TYPE, optional
+            DESCRIPTION. The default is None.
+        locx : TYPE, optional
+            DESCRIPTION. The default is None.
+        locy : TYPE, optional
+            DESCRIPTION. The default is None.
+        locxy : TYPE, optional
+            DESCRIPTION. The default is None.
+        m : TYPE, optional
+            DESCRIPTION. The default is None.
+        m_list : TYPE, optional
+            DESCRIPTION. The default is None.
+        tree : TYPE, optional
+            DESCRIPTION. The default is None.
+        xtal_feature : TYPE, optional
+            DESCRIPTION. The default is 'reppoints'.
+        xtal : TYPE, optional
+            DESCRIPTION. The default is None.
+        xtal_list : TYPE, optional
+            DESCRIPTION. The default is None.
+        pxtal : TYPE, optional
+            DESCRIPTION. The default is None.
+        pxtal_list : TYPE, optional
+            DESCRIPTION. The default is None.
+         : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        TYPE
+            DESCRIPTION.
+
         """
-        limit_usetree = 5*10**3
-        # -------------------------------------
+        if other_data_type in ('point2d', 'p2d', 'p2'):
+            return self.distance(other_object_type='point2d',
+                                 point_data=point)
+        if other_data_type in ('point2d_list', 'p2d_list', 'p2dlist'):
+            return self.distance(other_object_type='point2d_list',
+                                 point_data=point_list)
+        if other_data_type in ('point_coord', 'point_coord', 'coord', 'xy'):
+            return np.sqrt((self.x-point_coord[0])**2
+                           + (self.y-point_coord[1])**2)
+        if other_data_type in ('xy_coord_list'):
+            return self.distance(other_object_type='xy_coord_list',
+                                 point_data=None)
+        if other_data_type in ('xy_coord_pairs'):
+            return self.distance(other_object_type='xy_coord_pairs',
+                                 point_data=None)
+        if other_data_type in ('mulpoint2d', 'mp2d'):
+            return self.distance(other_object_type='mulpoint2d',
+                                 point_data=m)
+        if other_data_type in ('mulpoint2d_list', 'list_of_mp2d',
+                               'mp2_list', 'mp2d_list'):
+            return [self.distance(other_object_type='mulpoint2d',
+                                  point_data=m) for m in m_list]
+        if other_data_type in ('upxo_xtal2d', 'shapely_xtal2d',
+                               'shapely_xtal', 'scipy_cell2d',
+                               'scipy_cell'):
+            pass
+        if other_data_type in ('upxo_pxtal2d'):
+            pass
+        if other_data_type in ('scipy_tree', 'ckdtree'):
+            pass
+        if other_data_type in ('shapely_xtal2d_centroid',
+                               'shapely_xtal_centroid'):
+            return self.distance(other_object_type='shapely_xtal2d_centroid',
+                                 point_data=xtal)
 
-        def _length_(data):
-            return np.sum([len(_) for _ in obj])
+    def find_neigh_points(self, method: str = 'points',
+                          points: list = None, point_type: str = 'upxo',
+                          ckdtrees: list = None, ckdtree_workers=1,
+                          srtrees: list = None,
+                          mulpoints: list = None, mulpoint_type: str = 'upxo',
+                          edges: list = None, edge_type: str = 'upxo',
+                          muledges: list = None, muledge_type: str = 'upxo',
+                          rings: list = None, ring_type: str = 'upxo',
+                          partitions: list = None,
+                          partition_type: str = 'upxo',
+                          mulpartitions: list = None,
+                          mulpartition_type: str = 'upxo',
+                          cutoffshape: str = 'circle',
+                          cut_off_radii: float = 1.0,
+                          r1: float = 1.0, r2: float = 1.0,
+                          a: float = 1.0, b: float = 1.0, angle: float = 0.0,
+                          comparison1: str = 'le', comparison2: str = 'ge',
+                          other_point_type='self',  # LEAVE UNDOCUMENTED
+                          other_point=[0.0, 0.0]  # LEAVE UNDOCUMENTED
+                          ):
+        """
+        Find neighbouring points within a circle, ellipse, square, rectangle
+        and hexagon
 
-        def _D_(otype, obj):
-            # FIND DISTANCES
-            # Use only when [_length_(obj) < limit_usetree]
-            return [self.distance(otype=otype, obj=olist) for olist in obj]
+        Parameters
+        ----------
+        method : str, default "points"
+            Specifies the type of comparison data. Options include "points",
+            "ckdtrees", "srtrees", "mulpoints", "edges", "muledges",
+            "rings", "mulrings", "partitions", "mulpartitions".
+        points : list
+            A list of points. Data-type of all elements of `points` MUST be
+            same. NO FURTHER CHECKS ARE MADE TO ENSURE THIS.
+        point_type: str, default "upxo"
+            Data-type of all elements of the `points` argument. Allowed values
+            are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        ckdtrees : list
+            A list of scipy ckdtree objects. Returned object will be list of
+            lists. An inner list may contain points which are members of the
+            corresponding ckdtree object and also ARE neighbours to self
+            point object.
+        srtrees : list
+            A list of shapely srtree objects. Returned object will be list of
+            lists. An inner list may contain points which are members of the
+            corresponding srtree object and also ARE neighbours to self
+            point object.
+        mulpoints : list
+            A list of multi-point objects. Returned object will be list of
+            lists. An inner list may contain points which are members of the
+            corresponding mulpoint object and also ARE neighbours to self
+            point object.
+        mulpoint_type : str, default "upxo"
+            Data-type of all elements of the `mulpoints` argument. Allowed
+            values are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        edges : list
+            A list of edge objects
+        edge_type: str
+            Data-type of all elements of the `edges` argument. Allowed
+            values are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        muledges : list
+            A list of muledge objects
+        muledge_type: str
+            Data-type of all elements of the `muledges` argument. Allowed
+            values are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        rings : list
+            A list of ring objects
+        ring_type : str
+            Data-type of all elements of the `ring` argument. Allowed
+            values are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        partitions : list
+            A list of partition objects
+        partition_type : str
+            Data-type of all elements of the `partition` argument. Allowed
+            values are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        mulpartitions : list
+            A list of mulpartition objects
+        mulpartition_type : str
+            Data-type of all elements of the `mulpartition` argument. Allowed
+            values are "upxo", "shapely", "vtk", "coord_pairs", "coords"
+        cutoffshape : str, default "circle"
+            Choice of the cut-off-shape
+            Options include circle, ellipse, square, rectangle and hexagon
+        cut_off_radii : float, default 1.0
+            Characteristic length (radius) if cutoffshape == 'circle'
+        r1 and r2 : float and float, default 1.0 and 1.0
+            Characteristic lengths (radii) if cutoffshape == 'ellipse'
+            Larger radius oriented along x-axis before applying rotation
+        a : float, default 1.0
+            Characteristic length if cutoffshape == 'square'
+        a and b : float and float, default 1.0 and 1.0
+            Characteristic lengths (side lengths) if cutoffshape == 'rectangle'
+            Larger side oriented along x-axis before applying rotation
+        angle : float, default 0.0 degrees
+            Angle of cutoffshape's orientation with x+ axis
+            Units: degrees
 
-        def _ind_co_circle_(D, R, CMPOP):
-            # FIND INDICES OF POINTS INSIDE R
-              # INSIDE, INSIDE AND ON, OUTSIDE, OR, OUTSIDE AND ON is decided
-              # by beh
-            # D: list of list of distances
-            # R: cut-off radius
-            # CMPOP: Comparison operator
-            if CMPOP in ('lt', '<'):
-                indices = [tuple(np.array(np.where(_ < R)[0]).tolist())
-                           for _ in D]
-            elif CMPOP in ('le', '<='):
-                indices = [tuple(np.array(np.where(_ <= R)[0]).tolist())
-                           for _ in D]
-            elif CMPOP in ('gt', '>'):
-                indices = [tuple(np.array(np.where(_ > R)[0]).tolist())
-                           for _ in D]
-            elif CMPOP in ('ge', '>='):
-                indices = [tuple(np.array(np.where(_ >= R)[0]).tolist())
-                           for _ in D]
-            return indices
-        # -------------------------------------
-        #               CASE - 01
-        # 1. List of list of upxo point2d objects - DONE
-        '''
-        p1, p2 = point2d(x=-2, y=0), point2d(x=-1, y=0)
-        p3, p4 = point2d(x=+0, y=0), point2d(x=+1, y=0)
-        p5 = point2d(x=+2, y=0)
+        Returns
+        -------
+        neigh_points : list/tuple/deque
+            An iterable collection of neighbouring point2d objects
 
-        points_upxo= ([p1, p2, p3, p4, p5],
-                      [p1.yadd(1),p2.yadd(1),p3.yadd(1),p4.yadd(1),p5.yadd(1)],
-                      [p1.yadd(2),p2.yadd(2),p3.yadd(2),p4.yadd(2),p5.yadd(2)]
-                     )
+        Notes
+        -----
+        ANy notes to come here.
 
-        p1.neigh(otype='points2d', obj=points_upxo,
-                 cos='circle', cor=3, CMPOP = '<=')
+        Examples-1.A
+        ------------
+        Example-1.A.1: method = "points", point_type = "upxo",
+                       cutoffshape == 'circle'
+        Example-1.A.2: method = "points", point_type = "upxo",
+                       cutoffshape == 'ellipse'
 
+        Examples-1.B
+        ------------
+        CASE: method = "points", point_type = "shapely"
+        Examples-1.C
+        ------------
+        CASE: method = "points", point_type = "vtk"
+        Examples-1.D
+        ------------
+        CASE: method = "points", point_type = "coord_pairs"
+        Examples-1.E
+        ------------
+        CASE: method = "points", point_type = "coords"
 
-        n, nsets, = 5001, 2
-        points = [dth.make_upxo_point2d_RANDU(n) for _ in range(nsets)]
+        Examples-2
+        ---------
+        CASE: method = "ckdtrees"
 
-        locxy = [[point.x, point.y] for point in list_of_points]
-        '''
-        if otype in dth.opt.upxo_point2d_list:
-            if _length_(obj) < limit_usetree:
-                distances = _D_(otype, obj)
+        Examples-3
+        ---------
+        CASE: method = "srtrees"
+
+        Examples-4
+        ---------
+        CASE: method = "mulpoints", mulpoint_type = "upxo"
+
+        Examples-5
+        ---------
+        CASE: method = "edges", edge_type = "upxo"
+
+        Examples-6
+        ---------
+        CASE: method = "muledges", muledge_type = "upxo"
+
+        Examples-7
+        ---------
+        CASE: method = "rings", ring_type = "upxo"
+
+        Examples-8
+        ---------
+        CASE: method = "mulrings", mulring_type = "upxo"
+
+        Examples-9
+        ---------
+        CASE: method = "partitions", partition_type = "upxo"
+
+        Examples-10
+        ---------
+        CASE: method = "mulpartitions", partition_type = "upxo"
+
+        Parameters
+        ----------
+        method : str, optional
+            DESCRIPTION. The default is 'points'.
+        points : list, optional
+            DESCRIPTION. The default is None.
+        point_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        ckdtrees : list, optional
+            DESCRIPTION. The default is None.
+        ckdtree_workers : TYPE, optional
+            DESCRIPTION. The default is 1.
+        srtrees : list, optional
+            DESCRIPTION. The default is None.
+        mulpoints : list, optional
+            DESCRIPTION. The default is None.
+        mulpoint_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        edges : list, optional
+            DESCRIPTION. The default is None.
+        edge_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        muledges : list, optional
+            DESCRIPTION. The default is None.
+        muledge_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        rings : list, optional
+            DESCRIPTION. The default is None.
+        ring_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        partitions : list, optional
+            DESCRIPTION. The default is None.
+        partition_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        mulpartitions : list, optional
+            DESCRIPTION. The default is None.
+        mulpartition_type : str, optional
+            DESCRIPTION. The default is 'upxo'.
+        cutoffshape : str, optional
+            DESCRIPTION. The default is 'circle'.
+        cut_off_radii : float, optional
+            DESCRIPTION. The default is 1.0.
+        r1 : float, optional
+            DESCRIPTION. The default is 1.0.
+        r2 : float, optional
+            DESCRIPTION. The default is 1.0.
+        a : float, optional
+            DESCRIPTION. The default is 1.0.
+        b : float, optional
+            DESCRIPTION. The default is 1.0.
+        angle : float, optional
+            DESCRIPTION. The default is 0.0.
+        comparison1 : str, optional
+            DESCRIPTION. The default is 'le'.
+        comparison2 : str, optional
+            DESCRIPTION. The default is 'ge'.
+        other_point_type : TYPE, optional
+            DESCRIPTION. The default is 'self'.
+        # LEAVE UNDOCUMENTED
+        other_point : TYPE, optional
+            DESCRIPTION. The default is [0.0, 0.0]  # LEAVE UNDOCUMENTED.
+
+        Returns
+        -------
+        POINTS : TYPE
+            DESCRIPTION.
+        NPOINTS : TYPE
+            DESCRIPTION.
+        INDICES : TYPE
+            DESCRIPTION.
+        DISTANCES : TYPE
+            DESCRIPTION.
+
+        """
+        if method == 'points' and point_type == 'upxo':
+            """
+            from point2d_04 import point2d
+            import datatype_handlers as dth
+
+            n, nsets, = 50, 2
+            points = [dth.make_upxo_point2d_RANDU(n) for _ in range(nsets)]
+            cut_off_radii = [0.25, 0.50]
+            NP, N, I, D = point2d().find_neigh_points(method = 'points',
+                                                points = points,
+                                                point_type = 'upxo',
+                                                cutoffshape = 'circle',
+                                                cut_off_radii = cut_off_radii
+                                                )
+            neigh_points, npoints, indices, distances = NP, N, I, D
+            print(len(neigh_points))
+            print(len(indices))
+            print(len(distances))
+            print(neigh_points)
+            print(indices)
+            print(distances)
+            """
+            limit_usetree = 5*10**3
+            # TODO: ABOVE LIMIT HAS TO BE DETERMINED AFTER TIME PROFILING !!
+            POINTS, NPOINTS, INDICES, DISTANCES = [], [], [], []
+            for _points, _r in zip(points, cut_off_radii):
+                if len(_points) <= limit_usetree:
+                    if not isinstance(_points, np.ndarray):
+                        _points = np.array(_points)
+                    if other_point_type == 'self':
+                        distances = np.array(self.distance(other_object_type='point2d_list',
+                                                           point_data=_points)
+                                             )
+                    else:
+                        distances = np.array(other_point.distance(other_object_type='point2d_list',
+                                                                  point_data=_points)
+                                             )
+                    indices = distances <= _r
+                    if cutoffshape == 'circle':
+                        if comparison1 == 'le':
+                            indices = distances <= _r
+                        elif comparison1 == 'lt':
+                            indices = distances <= _r
+                    _indices = [i for i, _ in enumerate(indices) if _]
+                    POINTS.append(list(_points[indices]))
+                    NPOINTS.append(len(_indices))
+                    INDICES.append(_indices)
+                    DISTANCES.append(list(distances[indices]))
+                if len(_points) > limit_usetree:
+                    if other_point_type == 'self':
+                        POINTS, NPOINTS, INDICES, DISTANCES = self.find_neigh_points(method='ckdtrees',
+                                                                                     points=points,
+                                                                                     point_type='upxo',
+                                                                                     cutoffshape='circle',
+                                                                                     cut_off_radii=cut_off_radii,
+                                                                                     ckdtree_workers=ckdtree_workers,
+                                                                                     other_point_type=other_point_type,
+                                                                                     other_point=other_point
+                                                                                     )
+                    else:
+                        POINTS, NPOINTS, INDICES, DISTANCES = other_point.find_neigh_points(method='ckdtrees',
+                                                                                            points=points,
+                                                                                            point_type='upxo',
+                                                                                            cutoffshape='circle',
+                                                                                            cut_off_radii=cut_off_radii,
+                                                                                            ckdtree_workers=ckdtree_workers,
+                                                                                            other_point_type=other_point_type,
+                                                                                            other_point=other_point
+                                                                                            )
+            return POINTS, NPOINTS, INDICES, DISTANCES
+        if method == 'ckdtrees' and point_type == 'upxo':
+            """
+            from point2d_04 import point2d
+            n, nsets, = 50, 2
+            points = [dth.make_upxo_point2d_RANDU(n) for _ in range(nsets)]
+            cut_off_radii = [0.25, 0.50]
+            NP, N, I, D = point2d().find_neigh_points(method = 'ckdtrees',
+                                                                                    points = points,
+                                                                                    point_type = 'upxo',
+                                                                                    cutoffshape = 'circle',
+                                                                                    cut_off_radii = cut_off_radii,
+                                                                                    ckdtree_workers = 1,
+                                                                                    other_point_type = 'self',
+                                                                                    other_point = None
+                                                                                    )
+            neigh_points, npoints, indices, distances = NP, N, I, D
+            print(len(neigh_points))
+            print(len(indices))
+            print(len(distances))
+            print(neigh_points)
+            print(indices)
+            print(distances)
+            """
+            from scipy.spatial import cKDTree as ckdt
+            # Use the right reference point coordinates
+            if other_point_type == 'self':
+                _x, _y = deepcopy(self.x), deepcopy(self.y)
             else:
-                pass
-            to_return = (distances, _ind_co_circle_(distances, cor, CMPOP))
-        # -------------------------------------
-        #               CASE - 02
-        # 2. List of list of xy coordiates - DONE
-        '''
-        points_list_coord = ([[-2,-1,0,1,2], [0,0,0,0,0]],
-                             [[-2,-1,0,1,2], [1,1,1,1,1]],
-                             [[-2,-1,0,1,2], [2,2,2,2,2]]
-                            )
+                _x, _y = other_point[0], other_point[1]
+            POINTS, NPOINTS, INDICES, DISTANCES = [], [], [], []
+            for _points_, r in zip(points, cut_off_radii):
+                # Make scipy ckdtree for the current point list
+                ckdt = dth.UpxoPointList_to_ckdtree(_points_)
+                # Identify the neighbouring point indices
+                indices = ckdt.query_ball_point(
+                    [_x, _y], r, workers=ckdtree_workers)
+                # Get their coordinates and calculate distances from self
+                # or reference points (other_point!!!)
+                __locxy = ckdt.data[indices].T
+                distances = np.sqrt((_x-__locxy[0])**2+(_y-__locxy[0])**2)
+                POINTS.append(list(np.array(_points_)[indices]))
+                NPOINTS.append(len(distances))
+                INDICES.append(indices)
+                DISTANCES.append(distances)
+            return POINTS, NPOINTS, INDICES, DISTANCES
+        if method == 'srtrees' and point_type == 'upxo':
+            '''
+            Shapely tree structure
+            '''
+            pass
+        if method in ('mulpoints', 'mulpoint', 'mps',
+                      'mp', 'upxo_mulpoint', 'unpxo_mp',
+                      'mp2', 'mp2d', 'mulpoints2d') and point_type == 'upxo':
+            '''
+            We first make the background data needed for the example.
 
-        p1.neigh(otype='xy_coord_list', obj=points_list_coord,
-                 cos='circle', cor=3, CMPOP = '<=')
-        '''
-        if otype in dth.opt.coord_point2d_list:
-            if _length_(obj) < limit_usetree:
-                distances = _D_(otype, obj)
+            from point2d_04 import point2d
+            from mulpoint2d_3 import mulpoint2d
+            randd, n_points = np.random.uniform, 100
+            points = [[point2d(x=randd(),
+                               y=randd()) for _ in range(n_points)] for _ in
+                      range(2)]
+            mpset = [mulpoint2d(method = 'points',
+                                point_objects = _points) for _points in
+                     points]
+            refpoint = point2d()
+
+            # We will start with the example now.
+            NP,N,I,D = refpoint.find_neigh_points(method='mulpoints',
+                                                  mulpoints=mpset,
+                                                  point_type='upxo',
+                                                  cutoffshape='circle',
+                                                  cut_off_radii=cut_off_radii,
+                                                  ckdtree_workers=1,
+                                                  other_point_type='self',
+                                                  other_point = None)
+             neigh_points, npoints, indices, distances = NP, N, I, D
+            '''
+            if other_point_type == 'self':
+                ref_point = self
             else:
-                pass
-            to_return = (distances, _ind_co_circle_(distances, cor, CMPOP))
-        # -------------------------------------
-        #               CASE - 03
-        # 3. List of list of x-y coordinate pairs - DONE
-        '''
-        points_coord_list = ([[-2,0],[-1,0],[0,0],[1,0],[2,0]],
-                             [[-2,1],[-1,1],[0,1],[1,1],[2,1]],
-                             [[-2,2],[-1,2],[0,2],[1,2],[2,2]],
-                             )
-        p1.neigh(otype='xy_coord_pairs_list', obj=points_coord_list,
-                 cos='circle', cor=2, CMPOP = '<=')
-        '''
-        if otype in dth.opt.coord_pairs_point2d_list:
-            if _length_(obj) < limit_usetree:
-                distances = _D_(otype, obj)
-            else:
-                pass
-            to_return = (distances, _ind_co_circle_(distances, cor, CMPOP))
-        # -------------------------------------
-        #               CASE - 04
-        # 4. List of list of shapely objects
-        # -------------------------------------
-        #               CASE - 05
-        # 5. List of list of cKDTress
-        '''
-        xy_pair_lists = [np.random.rand(2, 1000).T for _ in xy_lists]
-        ckdtrees = [ckdt(cpairlist) for cpairlist in xy_pair_lists]
-        p = point2d()
-        _, _, _, d = p.neigh(otype='ckdt_list', obj=ckdtrees, cor=0.5, CMPOP='<=')
-        print(d)
-        '''
-        if otype in dth.opt.ckdtree_list:
-            xself, yself = self.x, self.y
-            indices, distances, neigh, nneigh = [], [], [], []
-            for _tree_ in obj:
-                # Find indices of shortlisted points from the original dataset
-                ind = _tree_.query_ball_point([xself, yself], cor, workers=1)
-                # coordinates of shortlisted points
-                _locxy_ = _tree_.data[ind].T
-                # actual distances of shortlisted points
-                dist = np.sqrt((xself-_locxy_[0])**2+(yself-_locxy_[1])**2)
-                # Indices to sort distancesa in ascending order
-                ascend_ind = np.argsort(dist)
-                # Distances in ascending order
-                dist_ascend = dist[ascend_ind]
-                # coordinate list of points in ascending distances
-                locxy_ascend = _locxy_.T[ascend_ind].T
-                # BUILD DATA LISTS
-                distances.append(dist_ascend)
-                neigh.append(locxy_ascend)
-                nneigh.append(len(locxy_ascend[0]))
-                indices.append(ind)
-            to_return = (indices, distances, neigh, nneigh)
-        # -------------------------------------
-        # N. List of Multi-points -- point wise check
-        '''
-        Returns True and indices of multi-points and the points- within
-        which fall inside and on the circle of cut-off-radius centred at
-        current point object.
-
-        p = point2d(x=0, y=0, lean='ignore')
-        xy_lists = [[np.random.rand(10)+1, np.random.rand(10)+0],
-                    [np.random.rand(10)+1, np.random.rand(10)+1],
-                    [np.random.rand(10)+0, np.random.rand(10)+1],
-                    [np.random.rand(10)-1, np.random.rand(10)+1],
-                    [np.random.rand(10)-1, np.random.rand(10)+0],
-                    [np.random.rand(10)-1, np.random.rand(10)-1],
-                    [np.random.rand(10)+0, np.random.rand(10)-1],
-                    [np.random.rand(10)+1, np.random.rand(10)-1]
-                    ]
-        mp_list = [mulpoint2d(method='xy_list',
-                              coordxy=xy_list) for xy_list in xy_lists]
-
-        # TO FIND THE DISTANCES AND DOING MANUALLY
-        distances = p.distance(otype='ump2d_list', obj=mp_list)
-        neighbour_points = []
-        neighbour_mp = []
-        for i, dist in enumerate(distances):
-            neigh_points = list(np.where(dist <= 0.75)[0])
-            neighbour_points.append(neigh_points)
-            if len(neigh_points) > 0:
-                neighbour_mp.append(i)
-
-        # ALTERNATIVE TO ABOVE MANUAL METHOD
-        p.neigh(otype='ump2d_list', obj=mp_list, cor=1.75, CMPOP='<=',
-                nckdt_workers=1)
-        '''
-        if otype in dth.opt.upxo_mp2d_list:
-            if str(obj.__class__.__name__) == 'mulpoint2d':
-                obj = [obj]
-            dist = _D_('ump2d_list', obj)
-            to_return = tuple(_ind_co_circle_(dist, cor, CMPOP))
-        # -------------------------------------
-        return to_return
+                other_point = other_point
+            # mulpoints = mpset
+            ckdtress = [mulpoint.maketree(treeType='ckdtree',
+                                          saa=False,
+                                          throw=True) for mulpoint in mulpoints]
+            neigh_points, npoints, indices, distances = point2d().find_neigh_points(method='ckdtrees',
+                                                                                    points=points,
+                                                                                    point_type='upxo',
+                                                                                    cutoffshape='circle',
+                                                                                    cut_off_radii=cut_off_radii,
+                                                                                    ckdtree_workers=1,
+                                                                                    other_point_type='self',
+                                                                                    other_point=None
+                                                                                    )
+            neigh_points, npoints, indices, distances = point2d().find_neigh_points(method='ckdtrees',
+                                                                                    points=points,
+                                                                                    point_type=point_type,
+                                                                                    cutoffshape=cutoffshape,
+                                                                                    cut_off_radii=cut_off_radii,
+                                                                                    ckdtree_workers=ckdtree_workers,
+                                                                                    other_point_type=other_point_type,
+                                                                                    other_point=None
+                                                                                    )
+        if method == 'edges':
+            pass
+        if method == 'muledges':
+            pass
+        if method == 'rings':
+            pass
+        if method == 'mulrings':
+            pass
+        if method == 'partitions':
+            pass
+        if method == 'mulpartitions':
+            pass
 
     def find_parent_mulpoints(self,
                               mulpoints: list
@@ -1778,21 +2718,40 @@ class point2d():
         """
         pass
 
-    def find_nearest_point_cloud(self,
-                                 cor_start=0.1,
-                                 cor_end=1.0,
-                                 search_method='bisection'
-                                 ):
-        pass
-
     def find_nearest_mulpoints(self,
                                mulpoints: list
                                ):
+        """
+        Use tree to find this out.
+
+        Parameters
+        ----------
+        mulpoints : list
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         pass
 
     def find_neigh_mulpoints(self,
                              mulpoints: list
                              ):
+        """
+        Use tree to find this out.
+
+        Parameters
+        ----------
+        mulpoints : list
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
         pass
 
     def find_neigh_edges(self,
@@ -2036,24 +2995,37 @@ class point3d():
                  y: float = 0.0,
                  z: float = 0.0,
                  lean: str = 'lowest',
-                 set_rid: bool = False, rid_length: int = 4,
+                 set_rid: bool = False,
+                 rid_length: int = 4,
                  set_mid: bool = False,
-                 set_dim: bool = False, dim: int = 2,
-                 set_ptype: bool = False, ptype: str = 'vt2dseed',
-                 set_jn: bool = False, jn: int = 3,
-                 set_loc: bool = False, loc: str = 'interior',
+                 set_dim: bool = False,
+                 dim: int = 2,
+                 set_ptype: bool = False,
+                 ptype: str = 'vt2dseed',
+                 set_jn: bool = False,
+                 jn: int = 3,
+                 set_loc: bool = False,
+                 loc: str = 'interior',
                  store_original_coord: bool = False,
                  attach_mulpoints: bool = False,
                  attach_edges: bool = False,
                  attach_muledges: bool = False,
                  attach_xtals: bool = False,
                  attach_polyxtals: bool = False,
-                 set_phase: bool = False, phase_id: int = 1, phase_name: str = 'cucrzr',
-                 set_sfv_pol_area: bool = True, sfv_pol_area: int = 0,
-                 set_tcname: bool = False, tcname: str = 'B',
-                 set_ea: bool = True, sfv_repr_ea='Bunge', ea: list = [45, 35, 0],
-                 set_oo: bool = True, oo: object = None,
-                 set_tdist: bool = True, tdist: float = 0.0000000000001,
+                 set_phase: bool = False,
+                 phase_id: int = 1,
+                 phase_name: str = 'UPXO',
+                 set_sfv_pol_area: bool = True,
+                 sfv_pol_area: int = 0,
+                 set_tcname: bool = False,
+                 tcname: str = 'B',
+                 set_ea: bool = True,
+                 sfv_repr_ea='Bunge',
+                 ea: list = [45, 35, 0],
+                 set_oo: bool = True,
+                 oo: object = None,
+                 set_tdist: bool = True,
+                 tdist: float = 0.0000000000001,
                  store_vis_prop: bool = False,
                  make_partition: bool = False,
                  partition_n=4,
@@ -2089,6 +3061,7 @@ class point3d():
             self.ea = [45, 35, 0]
             self.oo = oo
             self.tdist = tdist
+            self.vprop = self.set_vis_prop()
             # self.make_partition(restart = False,
             #                    saa = True,
             #                    n = partition_n,
@@ -2149,6 +3122,8 @@ class point3d():
                 self.oo = oo
             if set_tdist:
                 self.tdist = tdist
+            if store_vis_prop:
+                self.vprop = self.set_vis_prop()
             if make_partition:
                 self.make_partition(restart=False,
                                     saa=True,
@@ -2210,6 +3185,8 @@ class point3d():
                 self.oo = oo
             if set_tdist:
                 self.tdist = tdist
+            if store_vis_prop:
+                self.vprop = self.set_vis_prop()
         if lean in ('highest'):
             self.x, self.y = float(x), float(y)
     # -----------------------------------------------------
@@ -2456,7 +3433,7 @@ class point3d():
     # >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
     def has(self, suffix):
-        suffix = suffix
+        suffix = suffix.lower()
         if suffix in ('tdist', 'toldist', 'tolerance'):
             suffix = 'tdist'
         elif suffix in ('jn', 'bjn', 'bj_n', 'j_n', 'jporder', 'xvo', 'xtal_vertex_order'):

@@ -1068,7 +1068,7 @@ class grid():
                                              S_total=self.uisim.S,
                                              xgr=self.xgr,
                                              ygr=self.ygr,
-                                             uigrid=self.uigrid
+                                             uigrid=self.uigrid,
                                              )
         elif study == 'parameter_sweep':
             xgr, ygr, npixels = self.uigrid.grid
@@ -1090,7 +1090,7 @@ class grid():
                                              S_total=self.uisim.S,
                                              xgr=xgr,
                                              ygr=ygr,
-                                             uigrid=self.uigrid
+                                             uigrid=self.uigrid,
                                              )
 
     def _setup_grain_properties_dict_(self):

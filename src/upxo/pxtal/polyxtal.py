@@ -37,8 +37,8 @@ import time
 import matplotlib.pyplot as plt
 from random import sample
 
-from upxo.geoEntities.point2d_04 import point2d
-from upxo.geoEntities.mulpoint2d_3 import mulpoint2d
+from upxo.geoEntities.point2d import point2d
+from upxo.geoEntities.mulpoint2d import mulpoint2d
 from upxo.statops.distr_01 import distribution
 from upxo._sup.console_formats import console_seperator
 from upxo.pxtal.vt import _shapely

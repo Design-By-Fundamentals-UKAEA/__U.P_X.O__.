@@ -13,7 +13,7 @@ import pygmsh
 import numpy as np
 import pyvista as pv
 # //////////////////////////////////////////////////////////////////////////////
-class vtpxtalmesh():
+class geo_pxtal_mesh():
     '''
     ##########################################################
     GENERAL NOTES AND REFERENCES: PYGMSH RELATED

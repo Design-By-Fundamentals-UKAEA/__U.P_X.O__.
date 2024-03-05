@@ -1,41 +1,68 @@
-_export
-    data exports to various formats
-******************************
-_sup
-    dataTypeHandlers
-******************************
 algorithms
-    - houses all algorithms (python files only)
+	houses all algorithms (python files only)
+******************************
+gbops
+	Grain boundary operations
+******************************
+ggrowth
+	Grain growth
+******************************
+heirGs
+	Heirarchical grain structures
+******************************
+matlab_scripts
+	A bunch of MATLAB scripts to deal with MTEX
+******************************
+parswep
+	Parameter sweeping
+******************************
+pxtalops
+	Poly-XTAL operations
 ******************************
 geoEntities
-    fundamental geometric entities and related opertations
+	fundamental geometric entities and related opertations
 ******************************
 interfaces
-    interfacing codes for abaqus, c, damask, dream3d, moose, os
-    user input excel files
-    auto generated reports
+	interfacing codes for abaqus, c, damask, dream3d, moose, os
+	user input excel files
+	auto generated reports
 ******************************
 material
     material related codes
 ******************************
 meshing
-    fe meshing codes
+	fe meshing codes
 ******************************
 pxtal
-    core codes for generating grain structures
+	core codes for generating grain structures
 ******************************
 repqual
-    Codes for representativeness qualification
+	Codes for representativeness qualification
 ******************************
 statops
-    Codes for mundane statistical operations
-******************************
-upxinstanciations
-    codes to develop high level upxo heirarhical grain structutre instances
+	Codes for mundane statistical operations
 ******************************
 vis
-    visualization package
+	Visualization module
+******************************
+xtal
+	Crystal
+******************************
+xtalops
+	Xtal operations
 ******************************
 xtalphy
-    crystallography
+	crystallography
+******************************
+__gblbckup
+	Global Back Up
+******************************
+_export
+	data exports to various formats
+******************************
+_sup
+	dataTypeHandlers
+******************************
+for_demos
+	Codes needed to execute demos
 ******************************

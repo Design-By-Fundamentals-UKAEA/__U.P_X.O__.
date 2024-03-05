@@ -58,10 +58,10 @@ class _validation():
     def __init__(self):
         pass
 
-    def ensure_ndarr_depth2(self,
-                            array: Iterable,
-                            var_name: str = 'VARIABLE') -> np.ndarray | list[
-                                np.ndarray]:
+    def __repr__(self):
+        return 'Validation'
+
+    def ensure_ndarr_depth2(self, array, var_name='VARIABLE'):
         """
         Updates all elements within an iterable (up to depth 2) to NumPy
         ndarrays.
@@ -138,6 +138,87 @@ class _validation():
         val.chk_obj_type(gs, expected_type)
         """
         return obj.__class__.__name__ == expected_type
+
+    def valstrs(self, strings):
+        if not isinstance(strings, Iterable):
+            strings = (strings,)
+        for string in strings:
+            if not isinstance(string, str):
+                raise TypeError(f'Invalid type({string}). Expected: {str}',
+                                f' Receieved: {type(string)}')
+
+    def val_data_exist(self, *args, **kwargs):
+        if args:
+            for arg in args:
+                print(type(arg))
+                if arg is None:
+                    raise ValueError('One of inputs is empty')
+        if kwargs:
+            for kwarg_key, kwarg_val in kwargs.items():
+                if not kwarg_val:
+                    raise ValueError(f'{kwarg_key} value is empty.')
+
+    def valnparr_types(self, arr1, arr2):
+        '''
+        from upxo._sup.validation_values import _validation
+        val = _validation()
+        val.valnparr_types(arr1, arr2)
+        '''
+        if not type(arr1) == type(arr2):
+            raise TypeError('The two arguments are not of same type.'
+                            'Expected: both must be numpy.ndarray')
+
+    def valnparr_shape(self, arr1, arr2):
+        '''
+        val.valnparr_shape(arr1, arr2)
+        '''
+        # Validate existance
+        self.val_data_exist(array1=arr1,
+                            array2=arr2)
+        # Validate numpy array type
+        self.valnparr_types(arr1, arr2)
+        if not arr1.shape == arr2.shape:
+            raise ValueError('Entered np arrays must have same shape.')
+
+    def valnparrs_types(self, *args):
+        '''
+        Validate numpy arrays for same type
+
+        from upxo._sup.validation_values import _validation
+        val = _validation()
+        val.valnparrs_types(*args)
+        '''
+        # Validate existence
+        self.val_data_exist(*args)
+        # Validate types
+        if len(args) == 1:
+            if not isinstance(args[0], np.ndarray):
+                raise TypeError('arg no.1 is not a numpy array')
+        elif len(args) > 1:
+            for i, arg in enumerate(args[1:], start=1):
+                if not isinstance(arg, type(args[0])):
+                    raise TypeError(f'arg no.{i} is not a numpy array')
+
+    def valnparrs_shapes(self, *args):
+        '''
+        Validate numpy arrays for same shape
+
+        from upxo._sup.validation_values import _validation
+        val = _validation()
+        a = np.random.random((3, 3))
+        b = np.random.random((3, 3))
+        c = np.random.random((3, 3))
+        d = np.random.random((3, 4))
+        val.valnparrs_shapes(a, b, c, d)
+        '''
+        # Validate types. This also valkidates existance by default
+        self.valnparrs_types(*args)
+        # Validate shapes
+        if len(args) > 1:
+            for i, arg in enumerate(args[1:], start=1):
+                if not arg.shape == args[0].shape:
+                    raise TypeError(f'Arg no.{i}.shape is not same'
+                                    ' as Arg no.0.shape')
 
     def contains_nparray(self,
                          ttype: str = 'gbjp_kernels2d',

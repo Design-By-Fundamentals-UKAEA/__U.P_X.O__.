@@ -1,3 +1,8 @@
+import os
+from copy import deepcopy
+import numpy as np
+from upxo._sup.gops import att
+
 class mesh_mcgs2d():
     """
     This is a core mcgs.meshing class
@@ -87,23 +92,24 @@ class mesh_mcgs2d():
                  )
 
     def __init__(self, uimesh, uigrid, dim, m, lgi):
+        self.__uimesh = uimesh
+        self.__uigrid = uigrid
         self.target_fe_software = uimesh.mesh_target_fe_software
         self.meshing_package = uimesh.mesh_meshing_package
         self.gb_conformity = uimesh.mesh_gb_conformity
         self.element_type = uimesh.mesh_element_type
         self.reduced_integration = uimesh.mesh_reduced_integration
-        self.__uimesh = uimesh
-        self.__uigrid = uigrid
         self.m = m
         self.lgi = lgi
         self.dim = dim
         self.mesher_brancher()
 
     def __att__(self):
-        return gops.att(self)
+        return att(self)
 
     def mesher_brancher(self):
         if self.target_fe_software == 'Abaqus':
+            print('--------- 1 ---------')
             self.abaqus_mesher_brancher()
         elif self.target_fe_software == 'Moose':
             self.moose_mesher_brancher()
@@ -111,7 +117,10 @@ class mesh_mcgs2d():
             self.damask_mesher_brancher()
 
     def abaqus_mesher_brancher(self):
+        print(self.meshing_package)
+        print(self.gb_conformity)
         if self.meshing_package == 'UPXO' and self.gb_conformity == 'Non-Conformal':
+            print('--------- 2 ---------')
             self.upxo_abaqus_nonconformal_mesher()
         elif self.meshing_package in ('UPXO',
                                       'GMSH') and self.gb_conformity == 'Conformal':
@@ -130,6 +139,7 @@ class mesh_mcgs2d():
 
     def upxo_abaqus_nonconformal_mesher(self):
         if self.dim == 2 and self.element_type == 'quad4':
+            print('--------- 3 ---------')
             self.mesh_abaqus_upxo_nonconformal_quad4()
         elif self.dim == 2 and self.element_type == 'quad8':
             self.mesh_abaqus_upxo_nonconformal_quad8()  # <-------- MAKE NEW DEF
@@ -293,8 +303,8 @@ class mesh_mcgs2d():
         print(f"Target FE software: {self.target_fe_software}")
 
     def export_abaqus_inp_file(self,
-                               folder="pxtal_mesh",
-                               file="pxtal_mesh.inp",
+                               folder="DATABASE_FEMESH",
+                               file="UPXO_ABQ_MESH.inp",
                                ):
         os.makedirs(folder, exist_ok=True)
         file = file
@@ -422,4 +432,3 @@ class mesh_mcgs2d():
             print('\n')
             print('-------------------------------------------')
         f.close()
-

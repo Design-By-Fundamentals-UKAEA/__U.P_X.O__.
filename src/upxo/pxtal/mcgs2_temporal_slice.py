@@ -1,14 +1,22 @@
+import os
 from copy import deepcopy
+from typing import Iterable
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from skimage.measure import label as skim_label
-from upxo.geoEntities.point2d_04 import point2d
-from upxo.geoEntities.mulpoint2d_3 import mulpoint2d
+import seaborn as sns
+from upxo.geoEntities.point2d import point2d
+from upxo.geoEntities.mulpoint2d import mulpoint2d
 from upxo._sup.console_formats import print_incrementally
+from upxo._sup import dataTypeHandlers as dth
+from upxo.meshing.mesher_2d import mesh_mcgs2d
+
 class mcgs2_grain_structure():
     __slots__ = ('dim',  # Dimensionality of the grain structure
-                 'uigrid',  # Copy of grid.uigrid datastructure
+                 'uigrid',  # Copy of uigrid datastructure
+                 'uimesh',  # Copy of uimesh datastructure
                  'xgr',  # min, incr, max of x-axis
                  'ygr',  # min, incr, max of y-axis
                  'zgr',  # min, incr, max of z-axis
@@ -98,7 +106,8 @@ class mcgs2_grain_structure():
                  xgr=None,
                  ygr=None,
                  zgr=None,
-                 uigrid=None
+                 uigrid=None,
+                 uimesh=None,
                  ):
         """
 
@@ -127,13 +136,14 @@ class mcgs2_grain_structure():
         self.__ui = uidata
         self.px_size = px_size
         self.uigrid = uigrid
+        self.uimesh = uimesh
         self.set__spart_flag(S_total)
         self.set__s_gid(S_total)
         self.set__gid_s()
         self.set__s_n(S_total)
         self.g = {}
         self.gb = {}
-        self.info={}
+        self.info = {}
         # ------------------------------------
         '''
         gc: Grain Centroids
@@ -2119,6 +2129,18 @@ class mcgs2_grain_structure():
         if operation_validity and throw:
             return grain_plot
 
+    def plot_grains(self, gids):
+        """
+        self.plot_grains([1, 2, 3, 4])
+        """
+        if not isinstance(gids, Iterable):
+            raise TypeError('gids should be an Iterable')
+
+        lgi = {gid: None for gid in gids}
+        for gid in gids:
+            lgi[gid] = gid*(self.lgi == gid)
+        lgi = list(lgi.values())
+        plt.imshow(np.sum(lgi, axis=0))
 
     def plot_grains_prop_bounds_s(self,
                                   s,
@@ -2363,19 +2385,26 @@ class mcgs2_grain_structure():
         Use saa=True and throw=True to update and return mesh
         Use saa=False and throw=True to only return mesh
         '''
-        from mcgs import _uidata_mcgs_gridding_definitions_
-        uigrid = _uidata_mcgs_gridding_definitions_(self.__ui)
-        from mcgs import _uidata_mcgs_mesh_
-        uimesh = _uidata_mcgs_mesh_(self.__ui)
+        # from mcgs import _uidata_mcgs_gridding_definitions_
+        # uigrid = _uidata_mcgs_gridding_definitions_(self.__ui)
+        # from mcgs import _uidata_mcgs_mesh_
+        # uimesh = _uidata_mcgs_mesh_(self.__ui)
 
-        from mcgs import mesh
         if saa:
-            self.mesh = mesh(uimesh, uigrid, self.dim, self.m, self.lgi)
+            self.mesh = mesh_mcgs2d(self.__ui['uimesh'],
+                                    self.uigrid,
+                                    self.dim,
+                                    self.m,
+                                    self.lgi)
             if throw:
                 return self.mesh
         if not saa:
             if throw:
-                return mesh(uimesh, uigrid, self.dim, self.m, self.lgi)
+                return mesh_mcgs2d(self.__ui['uimesh'],
+                                   self.uigrid,
+                                   self.dim,
+                                   self.m,
+                                   self.lgi)
             else:
                 return 'Please enter valid saa and throw arguments'
     # --------------------------------------------------------------------
@@ -2610,15 +2639,15 @@ class mcgs2_grain_structure():
         # from polyxtal import polyxtal2d as polyxtal
         from upxo.pxtal.polyxtal import vtpolyxtal2d as vtpxtal
         self.make_mulpoint2d_grain_centroids()
-        self.vtgs = vtpxtal(gsgen_method = 'vt',
-                            vt_base_tool = 'shapely',
-                            point_method = 'mulpoints',
-                            mulpoint_object = self.mp['gc'],
-                            xbound = [self.uigrid.xmin,
-                                      self.uigrid.xmax+self.uigrid.xinc],
-                            ybound = [self.uigrid.ymin,
-                                      self.uigrid.ymax+self.uigrid.yinc],
-                            vis_vtgs = True
+        self.vtgs = vtpxtal(gsgen_method='vt',
+                            vt_base_tool='shapely',
+                            point_method='mulpoints',
+                            mulpoint_object=self.mp['gc'],
+                            xbound=[self.uigrid.xmin,
+                                    self.uigrid.xmax+self.uigrid.xinc],
+                            ybound=[self.uigrid.ymin,
+                                    self.uigrid.ymax+self.uigrid.yinc],
+                            vis_vtgs=visualize
                             )
         if visualize:
             self.vtgs.plot(dpi = 100,
