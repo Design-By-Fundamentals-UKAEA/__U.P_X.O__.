@@ -1,0 +1,68 @@
+algorithms
+	houses all algorithms (python files only)
+******************************
+gbops
+	Grain boundary operations
+******************************
+ggrowth
+	Grain growth
+******************************
+heirGs
+	Heirarchical grain structures
+******************************
+matlab_scripts
+	A bunch of MATLAB scripts to deal with MTEX
+******************************
+parswep
+	Parameter sweeping
+******************************
+pxtalops
+	Poly-XTAL operations
+******************************
+geoEntities
+	fundamental geometric entities and related opertations
+******************************
+interfaces
+	interfacing codes for abaqus, c, damask, dream3d, moose, os
+	user input excel files
+	auto generated reports
+******************************
+material
+    material related codes
+******************************
+meshing
+	fe meshing codes
+******************************
+pxtal
+	core codes for generating grain structures
+******************************
+repqual
+	Codes for representativeness qualification
+******************************
+statops
+	Codes for mundane statistical operations
+******************************
+vis
+	Visualization module
+******************************
+xtal
+	Crystal
+******************************
+xtalops
+	Xtal operations
+******************************
+xtalphy
+	crystallography
+******************************
+__gblbckup
+	Global Back Up
+******************************
+_export
+	data exports to various formats
+******************************
+_sup
+	dataTypeHandlers
+******************************
+for_demos
+	Codes needed to execute demos
+******************************

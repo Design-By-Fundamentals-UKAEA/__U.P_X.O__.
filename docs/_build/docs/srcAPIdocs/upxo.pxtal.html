@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>upxo.pxtal package &mdash; UPXO: UKAEA Poly-XTAL Operations 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            UPXO: UKAEA Poly-XTAL Operations
+          </a>
+              <div class="version">
+                1.26.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../getting_started.html">Getting started</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">UPXO: UKAEA Poly-XTAL Operations</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">upxo.pxtal package</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/docs/srcAPIdocs/upxo.pxtal.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="upxo-pxtal-package">
+<h1>upxo.pxtal package<a class="headerlink" href="#upxo-pxtal-package" title="Permalink to this heading"></a></h1>
+<section id="submodules">
+<h2>Submodules<a class="headerlink" href="#submodules" title="Permalink to this heading"></a></h2>
+</section>
+<section id="module-upxo.pxtal.gridops">
+<span id="upxo-pxtal-gridops-module"></span><h2>upxo.pxtal.gridops module<a class="headerlink" href="#module-upxo.pxtal.gridops" title="Permalink to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="upxo.pxtal.gridops.make_grid_pxtal">
+<span class="sig-prename descclassname"><span class="pre">upxo.pxtal.gridops.</span></span><span class="sig-name descname"><span class="pre">make_grid_pxtal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">distribution_type</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#upxo.pxtal.gridops.make_grid_pxtal" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-upxo.pxtal.mcgs">
+<span id="upxo-pxtal-mcgs-module"></span><h2>upxo.pxtal.mcgs module<a class="headerlink" href="#module-upxo.pxtal.mcgs" title="Permalink to this heading"></a></h2>
+<p>s
+Description
+———–
+This is a core module of UPXO making use of Monte-Carlo (MC) simulation of
+grain growth.</p>
+<section id="high-level-tasks">
+<h3>High level tasks<a class="headerlink" href="#high-level-tasks" title="Permalink to this heading"></a></h3>
+<blockquote>
+<div><ul class="simple">
+<li><p>Generation and analyses of 2D and 3D MC grain structures (GS)</p></li>
+<li><p>Representativeness qualification of 2D MCGS</p></li>
+<li><p>Meshing and export of grain structure to ABAQUS</p></li>
+</ul>
+</div></blockquote>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<dl class="simple">
+<dt>Circulation restricted to the following until official release:</dt><dd><ul class="simple">
+<li><p>&#64;UKAEA: Vaasu Anandatheertha, Chris Hardie, Vikram Phalke</p></li>
+<li><p>&#64;UKAEA:  Ben Poole, Allan Harte, Cori Hamelin</p></li>
+<li><p>&#64;OX,UKAEA:  Eralp Demir, Ed Tarleton</p></li>
+</ul>
+</dd>
+</dl>
+<p>GENERAL INFORMATION</p>
+<ol class="arabic simple">
+<li><dl class="simple">
+<dt>Large simulation domain:</dt><dd><p>Number of pixels in lattice &gt;= 1E4
+Number of pixels in lattice * Total MC time &gt;= 1E7</p>
+</dd>
+</dl>
+</li>
+</ol>
+</div>
+</section>
+</section>
+<section id="upxo-pxtal-polycrystal-module">
+<h2>upxo.pxtal.polycrystal module<a class="headerlink" href="#upxo-pxtal-polycrystal-module" title="Permalink to this heading"></a></h2>
+</section>
+<section id="upxo-pxtal-polyxtal-module">
+<h2>upxo.pxtal.polyxtal module<a class="headerlink" href="#upxo-pxtal-polyxtal-module" title="Permalink to this heading"></a></h2>
+</section>
+<section id="module-upxo.pxtal.pxtalops">
+<span id="upxo-pxtal-pxtalops-module"></span><h2>upxo.pxtal.pxtalops module<a class="headerlink" href="#module-upxo.pxtal.pxtalops" title="Permalink to this heading"></a></h2>
+<p>Created on Tue Jul 12 11:00:09 2022</p>
+<p>&#64;author: rg5749</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="upxo.pxtal.pxtalops.bounding_rectangle_pxtal">
+<span class="sig-prename descclassname"><span class="pre">upxo.pxtal.pxtalops.</span></span><span class="sig-name descname"><span class="pre">bounding_rectangle_pxtal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pxtal</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#upxo.pxtal.pxtalops.bounding_rectangle_pxtal" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-upxo.pxtal.xtalops">
+<span id="upxo-pxtal-xtalops-module"></span><h2>upxo.pxtal.xtalops module<a class="headerlink" href="#module-upxo.pxtal.xtalops" title="Permalink to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="upxo.pxtal.xtalops.myFun">
+<span class="sig-prename descclassname"><span class="pre">upxo.pxtal.xtalops.</span></span><span class="sig-name descname"><span class="pre">myFun</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">argv</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#upxo.pxtal.xtalops.myFun" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+</section>
+<section id="module-upxo.pxtal">
+<span id="module-contents"></span><h2>Module contents<a class="headerlink" href="#module-upxo.pxtal" title="Permalink to this heading"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, UKAEA, Dr. Sunil Anandatheertha.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

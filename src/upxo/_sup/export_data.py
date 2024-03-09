@@ -1,0 +1,443 @@
+"""
+This module stores data used to export grain structures to different
+formats.
+
+HISTORY
+-------
+V.0.1: 06-03-2024. V.0.2: Operational. V.0.3: CTF numerical data format
+achieved. Docuementations added. V.0.4: Add misori template added
+"""
+__name__ = "UPXO"
+__author__ = "Dr. Sunil Anandatheertha"
+__version__ = "0.0.1"
+__doc__ = "Store data used to export grain structures"
+
+
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from upxo.interfaces.os.osops import get_path_UPXOwriterdataDIR
+from upxo.interfaces.os.osops import get_file_path
+from upxo._sup.validation_values import _validation
+
+
+class ctf():
+    """
+    UPXO core class to work with/using EBSD data
+
+    SLot variables:
+        root: path of this 'export_data' module
+        path: path containing the required file
+        header: ctf header information
+        header_lines: ctf header information as lines in list
+        data_format: TO BE DEPREVCATED
+        val: UPXO validation instance
+        phase_name: name of the phase in the CTF file
+        hgrid: x-grid
+        vgrid: y-grid
+        nstates: Number of monte-carlo states
+        mcstates: Monte-Carlo state numpy array
+        euler1: 1st Bunge's Euler angle
+        euler2: 2nd Bunge's Euler angle
+        euler3: 3rd Bunge's Euler angle
+        bands: Number of Kikuchi bands detected
+        error: Acquisiton error
+        mad: Mean angular deviation, deg
+        bc: Band contrast [0, 255]
+        bs: Band slope [0, 255]
+
+    from upxo._sup.export_data import ctf
+    ctf = ctf()
+    ctf.load_header_file(hfile='_ctf_header_CuCrZr_1.txt')
+    ctf.set_metadata(projectname='UKAEA: UPXO grain structure: CPFEM',
+                     username='Dr. Sunil Anandatheertha')
+
+    Example
+    ---------------
+    from upxo.ggrowth.mcgs import monte_carlo_grain_structure as mcgs
+    pxt = mcgs()
+    pxt.simulate()
+    pxt.detect_grains(mcsteps=None,
+                      kernel_order=2,
+                      store_state_ng=True,
+                      library='scikit-image')
+
+    pxt.char_morph_2d(8)
+
+    hgrid = pxt.gs[8].xgr
+    vgrid = pxt.gs[8].ygr
+    mcstates = pxt.gs[8].s
+
+    from upxo._sup.export_data import ctf
+    ctf = ctf()
+    ctf.load_header_file()
+    ctf.make_header_from_lines()
+    ctf.set_phase_name(phase_name='PHNAME')
+
+    ctf.set_grid(hgrid, vgrid)
+    ctf.set_state(pxt.uisim.S, mcstates)
+    ctf.set_grid_data(field_data='rand')
+    ctf.plot_ea_map(term=[1, 0, 0])
+    ctf.plot_ea_map(term=[0, 1, 0])
+    ctf.plot_ea_map(term=[0, 0, 1])
+    """
+    __slots__ = ('root', 'path', 'header', 'header_lines', 'data_format',
+                 'val', 'phase_name', 'phase', 'hgrid', 'vgrid', 'nstates',
+                 'mcstates', 'euler1', 'euler2', 'euler3', 'bands', 'error',
+                 'mad', 'bc', 'bs', 'ea1', 'ea2', 'ea3')
+
+    def __init__(self):
+        self.root = os.getcwd()
+        self.phase = self.ea1 = self.ea2 = self.ea3 = None
+        self.path = self.header = self.header_lines = self.data_format = None
+        self.hgrid = self.vgrid = self.nstates = self.mcstates = None
+        self.euler1 = self.euler2 = self.euler3 = None
+        self.bands = self.error = self.mad = self.bc = self.bs = None
+        self.val = _validation()
+
+    def __repr__(self):
+        return "UPXO.ctf"
+
+    def load_header_file(self,
+                         hfile='_ctf_header_CuCrZr_1.txt',
+                         filePath='default'):
+        """
+        hfile: HEader filename, including the extention.
+        Author: Dr. Sunil Anandatheertha
+        """
+        # Validate file Path
+        if filePath == 'default':
+            try:
+                self.path = get_path_UPXOwriterdataDIR()
+            except Exception as e:
+                print(f'Attempting to locate {hfile} using '
+                      f'alternate method due to error: {e}')
+                self.path = get_file_path(target_file_name=hfile)
+                if not self.path:
+                    raise FileNotFoundError(f"{hfile} could not be found.")
+        else:
+            self.path = self.val.val_path_exists(filePath, throw_path=True)
+
+        # Validate file existence
+        self.val.val_file_exists(self.path, hfile)
+        # Load the file
+        try:
+            with open(self.path/hfile, 'r', encoding='utf-8') as file:
+                self.header_lines = file.readlines()
+        except FileNotFoundError:
+            print(f"The file {self.path} does not exist.")
+        except Exception as e:
+            print(f"An error occurred while reading the file: {e}")
+
+    def set_phase_name(self, phase_name='PHNAME'):
+        '''Set phase_name attributes'''
+        self.val.valstrs((phase_name, ))
+        self.phase_name = phase_name
+
+    def set_metadata(self, **kwargs):
+        """
+        Permitted input arguments:
+            1. projectname
+            2. username
+        EXAMPLE:
+            ctf.set_metadata(projectname='UKAEA: UPXO grain structure: CPFEM',
+                             username='YOUR NAME')
+        Author: Dr. Sunil Anandatheertha
+        """
+        # Permitted key: (line starts in header info lines, str to replace)
+        _permitted_keys_starts_ = {'projectname': ('Prj',
+                                                   '__UPXO_Grain_Structure__'),
+                                   'username': ('Author',
+                                                '__USERNAME__')
+                                   }
+        # Validate if all inputs are permitted inputs
+        if set(kwargs.keys())-set(_permitted_keys_starts_.keys()):
+            raise TypeError('One or more inputs invalid.'
+                            f'permitted arguments: {_permitted_keys_starts_}')
+        # Validate if all input argument values atr strings
+        self.val.valstrs(kwargs.values())
+        # Replace the values in ctf header infgormation
+        for idx, _ in enumerate(self.header_lines):
+            for k, v in _permitted_keys_starts_.items():
+                if v[0] in self.header_lines[idx]:
+                    self.header_lines[idx] =\
+                        self.header_lines[idx].replace(v[1],
+                                                       kwargs[k])
+
+    def set_grid(self, hgrid, vgrid):
+        '''Set hgrid and vgrid attributes'''
+        self.val.valnparrs_nelem(hgrid, vgrid)
+        self.hgrid, self.vgrid = hgrid, vgrid
+
+    def set_phase(self, phase):
+        '''Set phase attributes'''
+        self.val.valnparrs_nelem(self.hgrid, phase)
+        self.phase = phase
+
+    def set_state(self, nstates, mcstates):
+        '''Set nstates and mcstates attributes'''
+        self.val.valnparrs_nelem(self.hgrid, mcstates)
+        self.nstates = nstates
+        self.mcstates = mcstates
+
+    def set_bands(self, bands):
+        '''Set bands attributes'''
+        self.val.valnparrs_nelem(self.hgrid, bands)
+        self.bands = bands
+
+    def set_error(self, error):
+        '''Set error attributes'''
+        self.val.valnparrs_nelem(self.hgrid, error)
+        self.error = error
+
+    def set_ea(self, euler1, euler2, euler3):
+        '''Set euler1, euler2 and euler3 attributes'''
+        self.val.valnparrs_nelem(self.hgrid, euler1, euler2, euler3)
+        self.euler1 = euler1
+        self.euler2 = euler2
+        self.euler3 = euler3
+
+    def make_header_from_lines(self):
+        self.header = ''.join(self.header_lines)
+
+    def add_misori(self,
+                   glb_pert_min_ea1=0, glb_pert_max_ea1=7.5,
+                   glb_pert_min_ea2=0, glb_pert_max_ea2=7.5,
+                   glb_pert_min_ea3=0, glb_pert_max_ea3=7.5,
+                   lcl_pert_min_ea1=0, lcl_pert_max_ea1=2.5,
+                   lcl_pert_min_ea2=0, lcl_pert_max_ea2=2.5,
+                   lcl_pert_min_ea3=0, lcl_pert_max_ea3=2.5,
+                   distance_measure='cartesian'):
+        """
+        Add a perturnation to euler angles.
+        glb (i.e. global) values apply across Monte-Carlo state wise
+        loc (i.e. local) values apply to each Monte-Carlo state wise
+
+        removing loc would be akin to having a grain averaged orientation
+        removing glb would be akin to having a tex comp averaged
+        orientation.
+
+        Adding glb perturbations:
+        -------------------------
+        Initially, a unique Euler angle would be asscoaited to a unique
+        mcstate value. Hence, many grains having the same state would be
+        assigned the same Euler angle. To overcome this, a glb pert bounded
+        by [glb_pert_min, glb_pert_max] is introduced. HEnce a uniquie
+        Euler angle nearby to the previous oreintation is introduced to
+        every grain id beloging to a certain state. This is then repeated
+        for all available states, thus covering all the grains.
+
+        I provide a pseudo code and implementation below:
+
+
+
+        STEP 1 ---->
+        * Build s list
+        * for s in range(pxtal.uisim.S): sgid = {s: [gid1, gid2, ...]}
+        The above may just as well be achieved by takint it from gs instance
+        sgid = pxtal.gs[n].sgid
+        -------:: IMPLEMENTATION of STEP 1 -- tested
+        mcstep = 8
+        S = np.arange(1, pxt.uisim.S+1)
+        sgid = pxt.gs[mcstep].s_gid
+        euler1 = np.zeros_like(hgrid)
+        euler2 = np.zeros_like(hgrid)
+        euler3 = np.zeros_like(hgrid)
+
+
+
+        STEP 2 ---->
+        Build eas, representing state wise Bunge's Euler angle mapping
+        # Build Euler1, Euler2 and Euler3
+        -------:: IMPLEMENTATION of STEP 2 -- tested
+        eas = {s: None for s in S}
+        for s in S:
+            if sgid[s]:
+                # GEt the number of grains belonging to this s
+                ngrains = len(sgid[s])
+                # Build EA for all grains in this s
+                _ea_ = np.tile(np.array([ctf.ea1[s-1],
+                                         ctf.ea2[s-1],
+                                         ctf.ea3[s-1]]), (ngrains, 1))
+                # Build a random plus or minus array
+                _pm_ = np.random.choice([-1, 1], (ngrains, 3))
+                # Build EA perturations skeleton
+                _del_ = np.random.random((len(sgid[s]), 3))
+                # Find maximum perturbation distance
+                _delmax_ = glb_pert_max_ea1 - glb_pert_min_ea1
+                # Build EA perturations
+                _del_ = glb_pert_min_ea1 + _del_*_delmax_
+                # Instroduce perturbation
+                _ea_ += _pm_*_del_
+                eas[s] = _ea_
+
+
+
+        STEP 3 ---->
+
+
+        for s in S:
+            if sgid[s]:
+                for i, gid in enumerate(sgid[s], start=0):
+                    locs = pxt.gs[mcstep].g[gid]['grain'].loc
+                    for loc in locs:
+                        ea = eas[s][i]
+                        euler1[loc[0], loc[1]] = ea[0]
+                        euler2[loc[0], loc[1]] = ea[1]
+                        euler3[loc[0], loc[1]] = ea[2]
+
+        plt.imshow(euler3, cmap = 'gist_ncar')
+        plt.imshow(euler3, cmap = 'nipy_spectral')
+        plt.imshow((euler1+euler2+euler3)/3, cmap = 'nipy_spectral')
+
+        for s in S:
+            if sgid[s]:
+                ngrains = len(sgid[s])
+                for i, gid in enumerate(sgid[s], start=0):
+                    locs = pxt.gs[mcstep].g[gid]['grain'].loc
+                    npxl = locs.shape[0]
+                    pm = np.random.choice([-1, 1], (npxl, 3))
+                    ea1 = euler1[locs[:, 0], locs[:, 1]]
+                    ea2 = euler2[locs[:, 0], locs[:, 1]]
+                    ea3 = euler3[locs[:, 0], locs[:, 1]]
+                    _del_ = np.random.random((npxl, 3))
+                    _delmax_ = lcl_pert_max_ea1 - lcl_pert_min_ea1
+                    _del_ = lcl_pert_min_ea1 + _del_*_delmax_
+                    ea1 += pm[:, 0]*_del_[:, 0]
+                    ea2 += pm[:, 1]*_del_[:, 1]
+                    ea3 += pm[:, 2]*_del_[:, 2]
+                    euler1[locs[:, 0], locs[:, 1]] = ea1
+                    euler2[locs[:, 0], locs[:, 1]] = ea2
+                    euler3[locs[:, 0], locs[:, 1]] = ea3
+
+
+
+# Build EA perturations skeleton
+_del_ = np.random.random((len(sgid[s]), 3))
+# Find maximum perturbation distance
+_delmax_ = glb_pert_max_ea1 - glb_pert_min_ea1
+# Build EA perturations
+_del_ = glb_pert_min_ea1 + _del_*_delmax_
+# Instroduce perturbation
+_ea_ += _pm_*_del_
+
+
+                    for loc in locs:
+                        euler1[loc[0], loc[1]] += ea[0]
+                        euler2[loc[0], loc[1]] += ea[1]
+                        euler3[loc[0], loc[1]] += ea[2]
+
+
+
+        Adding lcl perturbations:
+        -------------------------
+        The above operation would then produce no orientation gradients
+        inside a grain. lcl_pert is used to introduce such gradients.
+
+        The approach to introduce glb and loc perturbations may change in the
+        future, but the intent is established.
+
+        Author: Dr. Sunil Anandatheertha
+        pxt.gs[8].g[1]['grain'].neigh -- lists the neighbouring grains
+        """
+        pass
+
+    def gen_rand_grid_field_data(self):
+        """
+        Generate random grid field data. Though random, pixels of same state
+        value wqill have the same euler angles, band contrast, band slope,
+        mean angular deviation, nu8mber of bands and error.
+
+        Author: Dr. Sunil Anandatheertha
+        """
+        # ------------------------------------
+        # INITIATE THE PHASE ARRAY
+        '''
+        # TODO: This could be a nice entry point to introduce phases to grains
+        Possible pseudo code for later implementaytion.
+
+        if 0 in mcstate:
+            1. Introduce a phase ID'ed 2 in self.phase for the corresponding
+            grain id.
+            2. Update the CTF header information about the new phase
+        '''
+        self.phase = np.ones_like(self.hgrid, dtype=float)
+        # ------------------------------------
+        # Initiate all oher arrays
+        self.euler1 = np.ones_like(self.hgrid, dtype=float)
+        self.euler2 = np.ones_like(self.hgrid, dtype=float)
+        self.euler3 = np.ones_like(self.hgrid, dtype=float)
+        self.bc = np.ones_like(self.hgrid, dtype=float)
+        self.bs = np.ones_like(self.hgrid, dtype=float)
+        # ------------------------------------
+        # Create the Euler angle - mcstate value mapper arrays
+        self.ea1, self.ea2, self.ea3 = np.random.uniform([0, 0, 0],
+                                                         [360, 180, 360],
+                                                         (self.nstates,
+                                                          3)).T
+        # ------------------------------------
+        # Create the bc and bs - mcstate value mapper arrays
+        _bc_ = np.random.randint(0, 255, (self.nstates, ))
+        _bs_ = np.random.randint(0, 255, (self.nstates, ))
+        # ------------------------------------
+        # Map the euler angles, bc and bs
+        for i, __ in enumerate(self.ea1, start=0):
+            _ = self.mcstates == i+1
+            self.euler1[_] = self.ea1[i]
+            self.euler2[_] = self.ea2[i]
+            self.euler3[_] = self.ea3[i]
+            self.bc[_] = _bc_[i]
+            self.bs[_] = _bs_[i]
+        # ------------------------------------
+        # Create error array
+        self.error = np.zeros(self.hgrid.shape, dtype=int)
+        # ------------------------------------
+        # Create MAD values b/w 0.3 and 0.4
+        self.mad = 0.3+0.1*np.random.random((self.hgrid.size, ))
+        # ------------------------------------
+        # Create bands arrays
+        self.bands = np.random.randint(7, 10, self.hgrid.shape)
+
+    def format_header(self):
+        '''Format the header to required size'''
+        self.header = self.header.format(self.hgrid.size, self.vgrid.size)
+
+    def set_grid_data(self, field_data='rand',
+                      bands=None, error=None,
+                      euler1=None, euler2=None, euler3=None,
+                      mad=None, bc=None, bs=None):
+        '''Set bands, error, euler1, euler2, euler3, mad, bc and bs
+        attributes'''
+        if field_data != 'rand':
+            # Validate for existance, type and shape of bands, error,...
+            self.val.valnparrs_shapes(bands, error, euler1, euler2, euler3,
+                                      mad, bc, bs)
+            self.val.valnparrs_nelem(self.hgrid, self.vgrid, bands, error,
+                                     euler1, euler2, euler3, mad, bc, bs)
+        else:
+            self.gen_rand_grid_field_data()
+
+    def assemble_grid_data(self):
+        return np.vstack((ctf.hgrid.ravel(),
+                          ctf.vgrid.ravel(),
+                          ctf.bands.ravel(),
+                          ctf.error.ravel(),
+                          ctf.euler1.ravel(),
+                          ctf.euler2.ravel(),
+                          ctf.euler3.ravel(),
+                          ctf.mad.ravel(),
+                          ctf.bc.ravel(),
+                          ctf.bs.ravel(),
+                          )
+                         )
+
+    def plot_ea_map(self, term=[1, 0, 0]):
+        """
+        Quickly plot the Euler angle map
+        """
+        term = [int(_/max(term)) for _ in term]
+        if all([_ == 0 for _ in term]):
+            raise ValueError(f'Input arg term: {term} is invalid')
+        ea = term[0]*self.euler1 + term[1]*self.euler2 + term[2]*self.euler3
+        ea = ea/term.count(1)
+        plt.imshow(ea)
