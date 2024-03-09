@@ -12,10 +12,11 @@ ndarrays.
 These functionalities enhance data integrity and streamline NumPy array
 handling in UPXO workflows.
 """
-
-
 import numpy as np
+import os
+from pathlib import Path
 from typing import Iterable
+from upxo._sup.dataTypeHandlers import dt
 
 
 class _validation():
@@ -54,12 +55,23 @@ class _validation():
                                                [1, 0, 1]])
                                      ])
     # ------------------------------------------------
+    # Do not use any speacial characters or spaces in any elements here
+    # Any special characters get stripped of the string and would fail
+    # validations !!
+    fileContent_options_all = ('ctfheader', 'ebsdctf', 'ctffile', 'ctf',
+                               'temperatures', 'states', 'grid2d', 'grid3d',
+                               'upxoinstance', 'femesh', 'orientations')
+    fileConOpt_ctf_headers = ('ctfheader', 'ebsdheader')
+    fileConOpt_ctf_files = ('ebsdctf', 'ctf', 'ctffile')
+    # ------------------------------------------------
+    valid_extensions = ('.txt', '.dat', '.ctf', '.crc', '.h5df', '.dream3d')
+    # ------------------------------------------------
 
     def __init__(self):
         pass
 
     def __repr__(self):
-        return 'Validation'
+        return 'UPXO.Validations'
 
     def ensure_ndarr_depth2(self, array, var_name='VARIABLE'):
         """
@@ -139,18 +151,30 @@ class _validation():
         """
         return obj.__class__.__name__ == expected_type
 
+    def isiter(self, _iter):
+        if not isinstance(_iter, Iterable):
+            raise TypeError('INput not iterable.')
+
     def valstrs(self, strings):
         if not isinstance(strings, Iterable):
             strings = (strings,)
         for string in strings:
-            if not isinstance(string, str):
+            if isinstance(string, str) or string.__class__.__name__ == 'WindowsPath':
+                pass
+            else:
                 raise TypeError(f'Invalid type({string}). Expected: {str}',
                                 f' Receieved: {type(string)}')
+
+    def valnums(self, numbers):
+        if not isinstance(numbers, Iterable):
+            numbers = (numbers,)
+        if not all([type(_) in dt.NUMBERS for _ in numbers]):
+            raise TypeError(f'Invalid types in({numbers})'
+                            f'Expected: type in {dt.Numbers}')
 
     def val_data_exist(self, *args, **kwargs):
         if args:
             for arg in args:
-                print(type(arg))
                 if arg is None:
                     raise ValueError('One of inputs is empty')
         if kwargs:
@@ -196,7 +220,7 @@ class _validation():
                 raise TypeError('arg no.1 is not a numpy array')
         elif len(args) > 1:
             for i, arg in enumerate(args[1:], start=1):
-                if not isinstance(arg, type(args[0])):
+                if not isinstance(arg, np.ndarray):
                     raise TypeError(f'arg no.{i} is not a numpy array')
 
     def valnparrs_shapes(self, *args):
@@ -219,6 +243,26 @@ class _validation():
                 if not arg.shape == args[0].shape:
                     raise TypeError(f'Arg no.{i}.shape is not same'
                                     ' as Arg no.0.shape')
+
+    def valnparrs_nelem(self, *args):
+        '''
+        Validate the total number of elemnets
+
+        from upxo._sup.validation_values import _validation
+        val = _validation()
+        a = np.random.random((3, 3))
+        b = np.random.random((9, 1))
+        c = np.random.random((1, 9))
+        val.valnparrs_nelem(a, b, c)
+        '''
+        # Validate if all are iterables
+        for ia in args:
+            self.isiter(ia)
+        # Validate types
+        self.valnparrs_types(*args)
+        # Validate nuimber of elemenrs
+        if len(set([arg.size for arg in args])) > 1:
+            raise ValueError('The np arrays have unequal sizes')
 
     def contains_nparray(self,
                          ttype: str = 'gbjp_kernels2d',
@@ -284,3 +328,34 @@ class _validation():
                               for valid_kernel in target)
         # ----------------------------------
         return containment
+
+    def val_path_exists(self, path, throw_path=True):
+        if not path:
+            raise ValueError('Path cannot be empty')
+        self.valstrs(path)
+        path = Path(path)
+        if path.exists():
+            if throw_path:
+                return path
+        else:
+            raise FileNotFoundError(f"Path: {path} does not exist.")
+
+    def val_filename_has_ext(self, file_name):
+        self.valstrs(file_name)
+        root, ext = os.path.splitext(file_name)
+        if not ext:
+            raise ValueError(f"{file_name} has no extention.")
+
+    def val_file_exists(self, path, file_name_with_ext):
+        path = self.val_path_exists(path, throw_path=True)
+        self.valstrs(file_name_with_ext)
+        if path.__class__.__name__ != 'WindowsPath':
+            path = Path(path)
+        if not Path(path/file_name_with_ext).exists():
+            raise FileNotFoundError(f'File: {file_name_with_ext} does not'
+                                    f'exist at Path: {path}')
+
+    def val_filename_ext_permitted(self, ext):
+        self.valstrs(ext)
+        if ext not in self.valid_extensions:
+            raise ValueError(f'{ext} is not a permitted extensions')

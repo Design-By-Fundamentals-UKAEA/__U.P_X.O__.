@@ -5,52 +5,61 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from skimage.measure import label as skim_label
+# from skimage.measure import label as skim_label
 import seaborn as sns
-from upxo.geoEntities.point2d import point2d
+# from upxo.geoEntities.point2d import point2d
 from upxo.geoEntities.mulpoint2d import mulpoint2d
 from upxo._sup.console_formats import print_incrementally
 from upxo._sup import dataTypeHandlers as dth
+from upxo._sup.gops import att
+from upxo._sup.data_templates import dict_templates
 from upxo.meshing.mesher_2d import mesh_mcgs2d
 
+
 class mcgs2_grain_structure():
-    __slots__ = ('dim',  # Dimensionality of the grain structure
-                 'uigrid',  # Copy of uigrid datastructure
-                 'uimesh',  # Copy of uimesh datastructure
-                 'xgr',  # min, incr, max of x-axis
-                 'ygr',  # min, incr, max of y-axis
-                 'zgr',  # min, incr, max of z-axis
-                 'm',  # MC temporal step to which this GS belongs to.
-                 's',  # State array
-                 'S',  # Total number of states
-                 'binaryStructure2D',  # 2D Binary Structure to identify grains
-                 'binaryStructure3D',  # 3D Binary Structure to identify grains
-                 'n',  # Number of grains
-                 'lgi',  # Lattice of Grains Ids
-                 'spart_flag',  # State wise partitioning
-                 'gid',  # Grain numbers used as grain IDs
-                 's_gid',  # DICT: {s: overall grain id i.e grain number}
-                 'gid_s',  # LIST: [a, b, c, ...] see explanation below.
-                 's_n',  # DICT: State partitioned number of grains
-                 'g',  # DICT: grains
-                 'gb',  # DICT: grains
-                 'positions',  # DICT: gids as per spatial location string
-                 'mp',  # DICT: UPXO mul-point objects
-                 'vtgs',  # DICT: VTGS instances
-                 'mesh',  # OBJECT: mesh data structure
-                 'px_size',  # FLOAT: pixel area if dim=2 else volume of dim=3
-                 'dim',  # INT: DImensionaality
-                 'prop_flag',  # DICT: flags indicating variables to compute
-                 'prop',  # PANDAS TABLE of properties
-                 'are_properties_available',  # True if properties have been caculated
-                 'prop_stat',  # PANDAS TABLE of property statistics
-                 '__gi__',  # Grain index used for __iter__
-                 '__ui',  # Stores original user inp used by grid() instance
-                 'display_messages',
-                 'info',
-                 'print_interval_bool'
-                 )
-    '''
+    """
+    SLOTS
+    -----
+    dim: Dimensionality of the grain structure
+    uigrid: Copy of uigrid datastructure
+    uimesh: Copy of uimesh datastructure
+    xgr: min, incr, max of x-axis
+    ygr: min, incr, max of y-axis
+    zgr: min, incr, max of z-axis
+    m: MC temporal step to which this GS belongs to.
+    s: State array
+    S: Total number of states
+    binaryStructure2D: 2D Binary Structure to identify grains
+    binaryStructure3D: 3D Binary Structure to identify grains
+    n: Number of grains
+    lgi: Lattice of Grains Ids
+    spart_flag: State wise partitioning
+    gid: Grain numbers used as grain IDs
+    s_gid: DICT: {s: overall grain id i.e grain number}
+    gid_s: LIST: [a, b, c, ...] see explanation below.
+    s_n: DICT: State partitioned number of grains
+    g: DICT: grains
+    gb: DICT: grains
+    positions: DICT: gids as per spatial location string
+    mp: DICT: UPXO mul-point objects
+    vtgs: DICT: VTGS instances
+    mesh: OBJECT: mesh data structure
+    px_size: FLOAT: pixel area if dim=2 else volume of dim=3
+    dim: INT: DImensionaality
+    prop_flag: DICT: flags indicating variables to compute
+    prop: PANDAS TABLE of properties
+    are_properties_available: True if properties have been caculated
+    prop_stat: PANDAS TABLE of property statistics
+    __gi__: Grain index used for __iter__
+    __ui: Stores original user inp used by grid() instance
+    display_messages',
+    info',
+    print_interval_bool',
+    EAPGLB', # EA Primary Global
+    EASGLB', # EA Secondary Global
+
+
+
     Explanation of 'n':
         It is the total number of grains across all states
 
@@ -93,83 +102,35 @@ class mcgs2_grain_structure():
             - if grains exist in this state, then it will be s in S
             - if no grains bvelowng to state s, then a will be None
         * and so on..
-    '''
+
+    """
+    __slots__ = ('dim', 'uigrid', 'uimesh', 'xgr', 'ygr', 'zgr', 'm', 's', 'S',
+                 'binaryStructure2D', 'binaryStructure3D', 'n', 'lgi',
+                 'spart_flag', 'gid', 's_gid', 'gid_s', 's_n', 'g', 'gb',
+                 'positions', 'mp', 'vtgs', 'mesh', 'px_size', 'dim',
+                 'prop_flag', 'prop', 'are_properties_available', 'prop_stat',
+                 '__gi__', '__ui', 'display_messages', 'info',
+                 'print_interval_bool', 'EAPGLB', 'EASGLB',)
     EPS = 1e-12
     __maxGridSizeToIgnoreStoringGrids = 25**3
 
-    def __init__(self,
-                 dim=2,
-                 m=None,
-                 uidata=None,
-                 S_total=None,
-                 px_size=None,
-                 xgr=None,
-                 ygr=None,
-                 zgr=None,
-                 uigrid=None,
-                 uimesh=None,
-                 ):
-        """
-
-
-        Parameters
-        ----------
-        dim : TYPE, optional
-            DESCRIPTION. The default is 2.
-        m : TYPE, optional
-            DESCRIPTION. The default is None.
-        uidata : TYPE, optional
-            DESCRIPTION. The default is None.
-        S_total : TYPE, optional
-            DESCRIPTION. The default is None.
-        px_size : TYPE, optional
-            DESCRIPTION. The default is None.
-
-        Returns
-        -------
-        None.
-
-        """
-        self.dim = dim
-        self.m = m
-        self.S = S_total
+    def __init__(self, dim=2, m=None, uidata=None, S_total=None, px_size=None,
+                 xgr=None, ygr=None, zgr=None, uigrid=None, uimesh=None,
+                 EAPGLB=None):
         self.__ui = uidata
-        self.px_size = px_size
-        self.uigrid = uigrid
-        self.uimesh = uimesh
+        self.dim, self.m, self.S, self.px_size = dim, m, S_total, px_size
+        self.uigrid, self.uimesh = uigrid, uimesh
         self.set__spart_flag(S_total)
         self.set__s_gid(S_total)
         self.set__gid_s()
         self.set__s_n(S_total)
-        self.g = {}
-        self.gb = {}
-        self.info = {}
+        self.g, self.gb, self.info = {}
+        self.EAPGLB = {}
+        self.EAPGLB['statewise'] = EAPGLB
+        self.EASGLB = self.EAPGLB
+        # Above EASGLB needs to be updatec in the orinetation mapping stagre
         # ------------------------------------
-        '''
-        gc: Grain Centroids
-        gcpos: Grain Centroids for position segregated grains
-        rp: Representative Points
-        jp2: Double Junction Points
-        jp3: Triple Junction Points
-        jp4: Qadruple Point Junctions
-        '''
-        self.mp = {'gc': None,
-                   'gcpos': {'in': None,
-                             'boundary': None,
-                             'corner': None,
-                             'left': None,
-                             'bottom': None,
-                             'right': None,
-                             'top': None,
-                             'pure_left': None,
-                             'pure_bottom': None,
-                             'pure_right': None,
-                             'pure_top': None,
-                             },
-                   'rp': None,
-                   'jp2': None,
-                   'jp3': None,
-                   }
+        self.mp = dict_templates.mulpnt_gs2d
         # ------------------------------------
         if self.dim==2:
             self.xgr, self.ygr = xgr, ygr
@@ -206,7 +167,6 @@ class mcgs2_grain_structure():
             else:
                 raise StopIteration
 
-
     def __str__(self):
         """
 
@@ -221,7 +181,7 @@ class mcgs2_grain_structure():
         return 'grains :: att : n, lgi, id, ind, spart'
 
     def __att__(self):
-        return gops.att(self)
+        return att(self)
 
     @property
     def get_px_size(self):

@@ -53,6 +53,7 @@ from prettytable import PrettyTable
 # from scipy.signal import argrelextrema
 # from scipy.signal import find_peaks
 from upxo.interfaces.user_inputs.gather_user_inputs import load_uidata
+from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as _GS_
 from upxo._sup import gops
 # from ..interfaces.os import package_check as pkgChk
 from upxo._sup import dataTypeHandlers as dth
@@ -117,6 +118,15 @@ class grid():
         zinda: np.ndarray: appended zindices (3D only)
         NLM_nd: np.ndarray: Non-Locality matrix
         NLM: np.ndarray: Non-locality matrix
+        EAPGLB: PRIMARY GLOBAL Euler angle Definition -- state wise.
+        EASGLB: SSECONDARY GLOBAL Euler angle definition -- state wise.
+                Different from EAPGLB in that adjustments that happen to
+                EAPGLB are carried out here and not in the proimary list.
+                This is NOT available at the grid level but at the grain
+                structure level.
+        #####################################################################
+        BOBBYS -- MELTON ROAD, LICESTER --- good thaali
+        #####################################################################
     """
     __slots__ = ('uigrid', 'uisim', 'uigsc', 'uiint', 'study',
                  'uigsprop', 'uimesh', 'uigeomrepr' '_mcsteps_',
@@ -126,7 +136,7 @@ class grid():
                  'NL_dict', 'px_length', 'px_size',
                  'S', 'sa', 'AIA', 'AIA0', 'AIA1',
                  'xind' 'yind', 'zind', 'xinda', 'yinda', 'zinda',
-                 'NLM_nd', 'NLM',
+                 'NLM_nd', 'NLM', 'EAPGLB',
                  'tslices_with_prop', 'vis', 'vizstyles', 'display_messages',
                  '__info_message_display_level__'
                  )
@@ -148,7 +158,7 @@ class grid():
             self.uimesh = uidata_all['uimesh']
             self.__ui = uidata_all
             self.uidata_all = uidata_all
-
+            self.EA = None
             self.initiate()
         elif study in ('para_sweep'):
             # Parameters to be manually set
@@ -418,6 +428,13 @@ class grid():
                           'hist_peri_ybounds_counts': [0, 50],
                           }
         self.display_messages = True
+
+    def build_ea(self):
+        nstates = self.uisim.S
+        ea1, ea2, ea3 = np.random.uniform([0, 0, 0],
+                                          [360, 180, 360],
+                                          (nstates, 3)).T
+        self.EAPGLB = (ea1, ea2, ea3)
 
     def build_original_coordinate_grid(self):
         """
@@ -1045,53 +1062,50 @@ class grid():
     def add_gs_data_structure_template(self,
                                        m=None,
                                        dim=None,
-                                       study='independent'
-                                       ):
-
-        from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as grain_structure
+                                       study='independent'):
         if study == 'independent':
             if m == 0:
-                self.gs = {m: grain_structure(m=m,
-                                              dim=dim,
-                                              uidata=self.__ui,
-                                              px_size=self.px_size,
-                                              S_total=self.uisim.S,
-                                              xgr=self.xgr,
-                                              ygr=self.ygr,
-                                              uigrid=self.uigrid,
-                                              )}
+                self.gs = {m: _GS_(m=m,
+                                   dim=dim,
+                                   uidata=self.__ui,
+                                   px_size=self.px_size,
+                                   S_total=self.uisim.S,
+                                   xgr=self.xgr,
+                                   ygr=self.ygr,
+                                   uigrid=self.uigrid,
+                                   EAPGLB=self.EAPGLB)}
             else:
-                self.gs[m] = grain_structure(m=m,
-                                             dim=dim,
-                                             uidata=self.__ui,
-                                             px_size=self.px_size,
-                                             S_total=self.uisim.S,
-                                             xgr=self.xgr,
-                                             ygr=self.ygr,
-                                             uigrid=self.uigrid,
-                                             )
+                self.gs[m] = _GS_(m=m,
+                                  dim=dim,
+                                  uidata=self.__ui,
+                                  px_size=self.px_size,
+                                  S_total=self.uisim.S,
+                                  xgr=self.xgr,
+                                  ygr=self.ygr,
+                                  uigrid=self.uigrid,
+                                  EAPGLB=self.EAPGLB)
         elif study == 'parameter_sweep':
             xgr, ygr, npixels = self.uigrid.grid
             if m == 0:
-                self.gs = {m: grain_structure(m=m,
-                                              dim=self.uigrid.dim,
-                                              uidata=self.__ui,
-                                              px_size=self.uigrid.px_size,
-                                              S_total=self.uisim.S,
-                                              xgr=self.xgr,
-                                              ygr=self.ygr,
-                                              uigrid=self.uigrid,
-                                              )}
+                self.gs = {m: _GS_(m=m,
+                                   dim=self.uigrid.dim,
+                                   uidata=self.__ui,
+                                   px_size=self.uigrid.px_size,
+                                   S_total=self.uisim.S,
+                                   xgr=self.xgr,
+                                   ygr=self.ygr,
+                                   uigrid=self.uigrid,
+                                   EAPGLB=self.EAPGLB)}
             else:
-                self.gs[m] = grain_structure(m=m,
-                                             dim=self.uigrid.dim,
-                                             uidata=self.__ui,
-                                             px_size=self.px_size,
-                                             S_total=self.uisim.S,
-                                             xgr=xgr,
-                                             ygr=ygr,
-                                             uigrid=self.uigrid,
-                                             )
+                self.gs[m] = _GS_(m=m,
+                                  dim=self.uigrid.dim,
+                                  uidata=self.__ui,
+                                  px_size=self.px_size,
+                                  S_total=self.uisim.S,
+                                  xgr=xgr,
+                                  ygr=ygr,
+                                  uigrid=self.uigrid,
+                                  EAPGLB=self.EAPGLB)
 
     def _setup_grain_properties_dict_(self):
         """

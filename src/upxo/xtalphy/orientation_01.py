@@ -5,18 +5,20 @@ class ori():
         self.ea = None
         self.q  = None
         self.aa = None
+
+    def
     def q_from_ea(cls, ph1: float, phi: float, ph2: float) -> 'Quat':
         """
         CREDIT: from quat package from DefDAP
         NOTE: Below information reprodiced verbatim from quat
-        
+
         Create a quat object from 3 Bunge euler angles.
         Parameters
         ----------
         ph1: First Euler angle, rotation around Z in radians.
         phi: Second Euler angle, rotation around new X in radians.
         ph2: Third Euler angle, rotation around new Z in radians.
- 
+
         Returns
         -------
         defdap.quat.Quat
@@ -36,7 +38,7 @@ class ori():
         """
         CREDIT: from quat package from DefDAP
         NOTE: Below information reprodiced verbatim from quat
-        
+
         Create a quat object from a rotation around an axis. This
         creates a quaternion to represent the passive rotation (-ve axis).
 
@@ -68,7 +70,7 @@ class ori():
         """
         CREDIT: from quat package from DefDAP
         NOTE: Below information reprodiced verbatim from quat
-        
+
         Calculate the Euler angle representation for this rotation.
 
         Returns
@@ -129,7 +131,7 @@ class ori():
         """
         CREDIT: from quat package from DefDAP
         NOTE: Below information reprodiced verbatim from quat
-        
+
         Calculate the rotation matrix representation for this rotation.
 
         Returns

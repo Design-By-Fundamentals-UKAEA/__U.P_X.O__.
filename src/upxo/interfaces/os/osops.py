@@ -6,8 +6,10 @@ import pandas as pd
 # import openpyxl
 from pathlib import Path
 from upxo._sup.validation_values import _validation
+from upxo._sup.dataTypeHandlers import strip_str as ss
 
-def get_file_path(target_filename=None):
+
+def get_file_path(target_file_name=None):
     """
     Search for a file with a specified name within a directory and all
     its subdirectories.
@@ -15,7 +17,7 @@ def get_file_path(target_filename=None):
     Parameters:
     - root_dir_path (str): The path to the directory where the search should
     start. It should be an absolute path.
-    - target_filename (str): The name of the file to search for, including the
+    - target_file_name (str): The name of the file to search for, including the
     extension.
 
     Returns:
@@ -29,13 +31,13 @@ def get_file_path(target_filename=None):
 
     Example:
         get_file_path(search_for_file=True,
-                      target_filename='_ctf_header_CuCrZr_1.txt')
+                      target_file_name='_ctf_header_CuCrZr_1.txt')
     """
     search_for_file = True  # Retain for later development
     if search_for_file:
         for dirpath, dirnames, filenames in os.walk(get_path_UPXOsrcDIR()):
-            if target_filename in filenames:
-                return os.path.join(dirpath, target_filename)
+            if target_file_name in filenames:
+                return os.path.join(dirpath, target_file_name)
     return None
 
 
@@ -84,6 +86,205 @@ def get_path_UPXOwriterdataDIR():
         return dp
     else:
         raise FileNotFoundError(f'Directory {dp} does not exist.')
+
+
+def load_file(valobj,
+              folder_path,
+              file_name_with_ext,
+              datatype='string',
+              encoding='utf-8',
+              loadas='line_by_line',
+              datatype_return='default',
+              isCTFheader=False,
+              isCTF=False,
+              isCRC=False,
+              isEAlist=False,
+              seperator_inline='tab',
+              validate_before=True):
+    """
+    Load a text file
+
+    Parameters
+    ----------
+    valobj:
+        upxo validation class instance
+    folder_path:
+        COmplete path to the directory having the file
+    file_name_with_ext:
+        Complete filenamre with the extension
+    datatype:
+        Tyepe of data in the text file
+    encoding:
+        Encoding to use while reading the file contents
+    loadas:
+        Specifies how the data is to be loaded or read.
+        Options include:
+            * line_by_line: Data will be read line by line and each line would
+            be an element of a list.
+    datatype_return:
+        Specifies if thw read data is to be converted into any other format
+        before being returned to the calling function scope. Options:
+            * 'default': No conversion happens
+            * 'np': Read data will be validated for numerical type and
+            converted to a numpy array.
+            * 'numlist': Read data will be validated foe numerical type and
+            converted to a list
+    isCTFheader:
+        Specifies whether the file being read is a CTF header file
+    isCTF:
+        Specifies whether the file being read is a EBSD CTF file. If True,
+        returned will be a dictionary having keys 'header' and 'values'
+    isCRC:
+        Specifies whether the file being read is a EBSD CRC file. If True,
+        returned will be a dictionary having keys 'header' and 'values'
+    seperator_inline:
+        Specifies the seperator in a line. If 'default', none will be
+        specified
+    validate_before:
+        Specifies whether path and filenames should be validated beforehand.
+
+    Examples
+    --------------------
+    from upxo._sup.validation_values import _validation
+    from upxo.interfaces.os.osops import load_file
+
+    valobj = _validation()
+    folder_path = get_path_UPXOsrcDIR()
+    file_name_with_ext = '_ctf_header_CuCrZr_1.txt'
+    get_file_path(target_file_name=file_name_with_ext)
+
+    load_file(valobj,
+              folder_path=None,
+              file_name_with_ext=None,
+              datatype='string',
+              encoding='utf-8',
+              loadas='line_by_line',
+              datatype_return='default',
+              isCTFheader=False,
+              isCTF=False,
+              isCRC=False,
+              seperator_inline='default',
+              validate_before=True)
+    """
+    pass
+
+
+def load_files(folder_path=None,
+               locinfo='defloc',
+               fileContent='ctf_header',
+               filename_full='_ctf_header_CuCrZr_1.txt',
+               prefix_string='UPXO_mcgs_CTF_slice_',
+               suffix_start=0,
+               suffix_incr=1,
+               suffix_end=49,
+               ext='.txt',
+               encoding='utf-8',
+               readMode='line_by_line'):
+    """
+    Loads loadable un-encrypted files. Loadable files include:
+        1. .txt, .dat, .ctf, .crc
+        2. .h5df, .dream3d
+
+    Examples
+    --------------
+    LOAD A CTF FILE HEADER
+    data = load_files(locinfo='defloc',
+                      fileContent='ctf_header',
+                      filename_full='_ctf_header_CuCrZr_1.txt',
+                      )
+    """
+    valobj = _validation()
+
+    # Validate locinfo for str
+    # If locinfo not 'defloc', validate user provided folder_path
+    valobj.valstrs(locinfo)
+    if locinfo != 'defloc':
+        folder_path = valobj.val_path_exists(folder_path, throw_path=True)
+        folder_path = Path(folder_path)
+    # Validate fileContent str type and see if filename_full is to be built
+    # NOTE: If filename_full, then it indicates that, user intends to
+    # load a bunch of files by using filename prefix stra dn suffix str!!
+    valobj.valstrs(fileContent)
+    if filename_full != 'build':
+        # Validate if filename_full has extention, if not attach extension.
+        try:
+            valobj.val_filename_has_ext(filename_full)
+        except Exception as e:
+            print(f'File extension not provided. Exception: {e}')
+            if ss(fileContent) in valobj.fileConOpt_ctf_headers:
+                print('   using the default .txt for file extention')
+                filename_full += '.txt'
+            elif ss(fileContent) in valobj.fileConOpt_ctf_files:
+                print('   using the default .ctf for file extention')
+                filename_full += '.ctf'
+        # If file exists and loadable, load data in the file.
+        if fileContent == 'ctf_header':
+            # Get the UPXO source directory
+            if locinfo == 'defloc':
+                folder_path = get_path_UPXOsrcDIR()/'UPXO'/'_writer_data'
+            # Validate if file exists
+            valobj.val_file_exists(folder_path, filename_full)
+            # READ CONTENTS OF THE CTF HEADER FILE
+            data = __load_file_1(__folder_path=folder_path,
+                                 __file_name_full=filename_full,
+                                 encoding='utf-8',
+                                 readmode='linebyline')
+            return {'data': data,
+                    'path': str(folder_path/filename_full)}
+    elif filename_full == 'build':
+        # Validate prefix_string, suffix_start, suffix_incr and suffix_end
+        valobj.valstrs(prefix_string)
+        valobj.val_filename_ext_permitted(ext)
+        valobj.valnums((suffix_start, suffix_incr, suffix_end))
+        # Build fname suffixes
+        sfxs = [str(sfxnum) for sfxnum in list(range(suffix_start,
+                                                     suffix_end+1,
+                                                     suffix_incr))]
+        # Build fnames
+        fnames = [prefix_string + sfx + ext for sfx in sfxs]
+        # Build filepaths
+        if locinfo == 'defloc' and fileContent == 'ctf_header':
+            folder_path = get_path_UPXOsrcDIR()/'UPXO'/'_writer_data'
+            valobj.val_path_exists(folder_path, throw_path=True)
+        filepaths = [folder_path/fname for fname in fnames]
+        # Initiate data array
+        data = {fname: None for fname in fnames}
+        fileexists = [True for fname in fnames]
+        loadable = [True for fname in fnames]
+        # Load data from files
+        for fname in fnames:
+            data[fname] = __load_file_1(__folder_path=folder_path,
+                                        __file_name_full=fname,
+                                        encoding='utf-8',
+                                        readmode='linebyline')
+        return {'data': data,
+                'path': str(folder_path/filename_full),
+                'fileexists': fileexists,
+                'filepaths': filepaths,
+                'loadable': loadable}
+
+
+def __load_file_1(__folder_path=None,
+                  __file_name_full=None,
+                  encoding='utf-8',
+                  readmode='full'):
+    # Build filepath
+    path = Path(__folder_path)/__file_name_full
+    try:
+        with open(path, 'r', encoding=encoding) as file:
+            loadable = False
+            if readmode in ('linebyline', 'line_by_line'):
+                data = file.readlines()
+                loadable = True
+            elif readmode in ('full', 'atonce'):
+                data = file.read()
+                loadable = True
+            return {'data': data,
+                    'loadable': loadable}
+    except Exception as e:
+        print(f"An error occurred while reading the file: {e}")
+        return {'data': None,
+                'loadable': False}
 
 
 def find_n_to_targetDIR(cwd: Path, target_dir_name: str) -> int:

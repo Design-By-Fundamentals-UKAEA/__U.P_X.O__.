@@ -2,7 +2,6 @@ __name__ = "UPXO"
 __author__ = "Dr. Sunil Anandatheertha"
 __version__ = "1.26.1"
 __doc__ = "This module initializes the UPXO and simplifies the pipeline."
-import numpy as np
 import matplotlib.pyplot as plt
 from upxo.geoEntities.mulpoint2d import mulpoint2d
 from upxo._sup.dataTypeHandlers import opt, strip_str
@@ -32,8 +31,7 @@ class gsets():
     VAL = _validation()
     __slots__ = ('type',
                  'db',
-                 'dim',
-                 )
+                 'dim')
 
     def __init__(self):
         pass
@@ -69,6 +67,11 @@ class gsets():
 
         Args:
 
+        Examples
+        --------------------
+        from upxo.ggrowth.mcgs import monte_carlo_grain_structure as mcgs
+        pxt = mcgs()
+        pxt.
         """
         from upxo.ggrowth.mcgs import monte_carlo_grain_structure as mcgs
         self.db['l0'] = mcgs()
