@@ -380,6 +380,8 @@ class grid():
                             dtype='int')
                             )
         # ----------------------------------------
+        self.build_ea()
+        # ----------------------------------------
         # Build the non-localcity parameter dictionary
         # TODO: This is to be made user input
         self.NL_dict = dict(NLM_b_dict=dict(flag="no",),
@@ -430,10 +432,9 @@ class grid():
         self.display_messages = True
 
     def build_ea(self):
-        nstates = self.uisim.S
         ea1, ea2, ea3 = np.random.uniform([0, 0, 0],
                                           [360, 180, 360],
-                                          (nstates, 3)).T
+                                          (self.uisim.S, 3)).T
         self.EAPGLB = (ea1, ea2, ea3)
 
     def build_original_coordinate_grid(self):

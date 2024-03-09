@@ -1,19 +1,23 @@
 import os
-from copy import deepcopy
-from typing import Iterable
 import math
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-# from skimage.measure import label as skim_label
 import seaborn as sns
+from copy import deepcopy
+from typing import Iterable
+import matplotlib.pyplot as plt
+from skimage.measure import regionprops
+# from skimage.measure import label as skim_label
 # from upxo.geoEntities.point2d import point2d
-from upxo.geoEntities.mulpoint2d import mulpoint2d
-from upxo._sup.console_formats import print_incrementally
-from upxo._sup import dataTypeHandlers as dth
-from upxo._sup.gops import att
-from upxo._sup.data_templates import dict_templates
+# from scipy.ndimage import label, generate_binary_structure
 from upxo.meshing.mesher_2d import mesh_mcgs2d
+from upxo.geoEntities.mulpoint2d import mulpoint2d
+from upxo.xtal.mcgrain2d_definitions import grain2d
+from upxo._sup.gops import att
+from upxo._sup import dataTypeHandlers as dth
+from upxo._sup.data_templates import pd_templates
+from upxo._sup.data_templates import dict_templates
+from upxo._sup.console_formats import print_incrementally
 
 
 class mcgs2_grain_structure():
@@ -112,35 +116,25 @@ class mcgs2_grain_structure():
                  '__gi__', '__ui', 'display_messages', 'info',
                  'print_interval_bool', 'EAPGLB', 'EASGLB',)
     EPS = 1e-12
-    __maxGridSizeToIgnoreStoringGrids = 25**3
+    __maxGridSizeToIgnoreStoringGrids = 250**2
 
     def __init__(self, dim=2, m=None, uidata=None, S_total=None, px_size=None,
                  xgr=None, ygr=None, zgr=None, uigrid=None, uimesh=None,
                  EAPGLB=None):
         self.__ui = uidata
-        self.dim, self.m, self.S, self.px_size = dim, m, S_total, px_size
+        self.dim, self.m, self.S, self.px_size = 2, m, S_total, px_size
         self.uigrid, self.uimesh = uigrid, uimesh
         self.set__spart_flag(S_total)
         self.set__s_gid(S_total)
         self.set__gid_s()
         self.set__s_n(S_total)
-        self.g, self.gb, self.info = {}
+        self.g, self.gb, self.info = {}, {}, {}
         self.EAPGLB = {}
         self.EAPGLB['statewise'] = EAPGLB
         self.EASGLB = self.EAPGLB
-        # Above EASGLB needs to be updatec in the orinetation mapping stagre
-        # ------------------------------------
+        # Above EASGLB needs to be updated in the orinetation mapping stagre
         self.mp = dict_templates.mulpnt_gs2d
-        # ------------------------------------
-        if self.dim==2:
-            self.xgr, self.ygr = xgr, ygr
-        elif self.dim==3:
-            if xgr.size>=self.__maxGridSizeToIgnoreStoringGrids:
-                self.xgr, self.ygr, self.zgr = None, None, None
-                self.info['grid'] = 'Large grid. Please use >> Grid_Object.(xgr/ygr/zgr) instead'
-            elif xgr.size<self.__maxGridSizeToIgnoreStoringGrids:
-                self.xgr, self.ygr, self.zgr = xgr, ygr, zgr
-        # ------------------------------------
+        self.xgr, self.ygr = xgr, ygr
         self.are_properties_available = False
         self.display_messages = False
         self.__setup__positions__()
@@ -168,16 +162,6 @@ class mcgs2_grain_structure():
                 raise StopIteration
 
     def __str__(self):
-        """
-
-
-        Returns
-        -------
-        str
-            DESCRIPTION.
-
-        """
-
         return 'grains :: att : n, lgi, id, ind, spart'
 
     def __att__(self):
@@ -185,16 +169,6 @@ class mcgs2_grain_structure():
 
     @property
     def get_px_size(self):
-        """
-
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
-        """
-
         return self.px_size
 
     def set__s_n(self,
@@ -216,81 +190,17 @@ class mcgs2_grain_structure():
 
         self.s_n = [0 for s in range(1, S_total+1)]
 
-    def set__s_gid(self,
-                   S_total,
-                   ):
-        """
-
-
-        Parameters
-        ----------
-        S_total : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-
+    def set__s_gid(self, S_total,):
         self.s_gid = {s: None for s in range(1, S_total+1)}
 
     def set__gid_s(self):
-        """
-
-
-        Returns
-        -------
-        None.
-
-        """
-
         self.gid_s = []
 
-    def set__spart_flag(self,
-                        S_total,
-                        ):
-        """
-
-
-        Parameters
-        ----------
-        S_total : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
+    def set__spart_flag(self, S_total,):
         self.spart_flag = {_s_: False for _s_ in range(1, S_total+1)}
 
-    def get_binaryStructure3D(self):
-        return self.binaryStructure3D
-
-    def set_binaryStructure3D(self, n):
-        if n in (1, 2, 3):
-            self.binaryStructure3D = n
-        else:
-             print('Invalid binary structure-3D. n must be in (1, 2, 3). Value not set')
-
-    def _check_lgi_dtype_uint8(self,
-                               lgi,
-                               ):
-        """
-        Validates and modifies (if needed) lgi user input data-type
-
-        Parameters
-        ----------
-        lgi : TYPE
-            DESCRIPTION.
-
-        Returns
-        -------
-        None.
-
-        """
-
+    def _check_lgi_dtype_uint8(self, lgi):
+        """ Validates and modifies (if needed) lgi user input data-type """
         if type(lgi) == np.ndarray and np.size(lgi) > 0 and np.ndim(lgi) == 2:
             if self.lgi.dtype.name != 'uint8':
                 self.lgi = lgi.astype(np.uint8)
@@ -299,24 +209,8 @@ class mcgs2_grain_structure():
         else:
             self.lgi = 'invalid mcgs 4685'
 
-    def calc_num_grains(self,
-                        throw=False,
-                        ):
-        """
-        Calculate the total number of grains in this grain structure
-
-        Parameters
-        ----------
-        throw : TYPE, optional
-            DESCRIPTION. The default is False.
-
-        Returns
-        -------
-        TYPE
-            DESCRIPTION.
-
-        """
-
+    def calc_num_grains(self, throw=False):
+        """ Calculate the total number of grains in this grain structure """
         if self.lgi:
             self.n = self.lgi.max()
             if throw:
@@ -332,8 +226,7 @@ class mcgs2_grain_structure():
     def neigh_gid(self, gid, throw=False):
         bounds = self.g[gid]['grain'].bbox_ex_bounds
         probable_grains_locs = self.lgi[bounds[0]:bounds[1]+1,
-                                        bounds[2]:bounds[3]+1
-                                        ]
+                                        bounds[2]:bounds[3]+1]
         # probable_grains = np.unique(probable_grains_locs)
         temp = deepcopy(probable_grains_locs)
         """ For row, col of a location in probable_grains_locs with value = 2,
@@ -354,10 +247,8 @@ class mcgs2_grain_structure():
                     if col + 1 < temp.shape[1]:
                         if temp[row, col + 1] != gid:
                             temp[row, col + 1] = -1
-        """
-        if values in probable_grains_locs not equal to -1,
-        then replace them with 0
-        """
+        """ if values in probable_grains_locs not equal to -1, then replace
+        them with 0 """
         for row in range(temp.shape[0]):
             for col in range(temp.shape[1]):
                 if temp[row, col] != -1:
@@ -380,181 +271,14 @@ class mcgs2_grain_structure():
         object's data structure """
         self.g[gid]['grain'].gbsegs_pre = gbsegs_pre
 
-
-
-        plot_neighbourhood = 0
-
-        if plot_neighbourhood == 1:
-            plt.figure()
-            plt.imshow(self.s[bounds[0] : bounds[1] + 1,
-                              bounds[2] : bounds[3] + 1])
-            plt.title("Local grain neighbourhood of \n Grain #= {}".format(gid))
-            plt.xlabel("x")
-            plt.ylabel("y")
-            plt.show()
-
-            plt.figure()
-            plt.imshow(gbsegs_pre)
-            plt.title("Local grain boundary neighbourhood of \n Grain #= {}".format(gid))
-            plt.xlabel("x")
-            plt.ylabel("y")
-            plt.show()
-
-            temp = np.zeros_like(self.lgi)
-            for ni in neighbour_ids:
-                temp[np.where(self.lgi == ni)] = ni
-
-            plt.figure()
-            plt.imshow(temp)
-            # title showing grain number and its neighbouring grain numbers
-            plt.title(f"Grain #= {gid} \n Neighbouring grain numbers: \n {neighbour_ids}")
-
-            plt.xlabel("x")
-            plt.ylabel("y")
-            plt.show()
-
-    def make_prop2d_df(self,
-                       brec=True,
-                       brec_ex=True,
-                       npixels=True,
-                       npixels_gb=True,
-                       area=True,
-                       eq_diameter=True,
-                       perimeter=True,
-                       perimeter_crofton=True,
-                       compactness=True,
-                       gb_length_px=True,
-                       aspect_ratio=True,
-                       solidity=True,
-                       morph_ori=True,
-                       circularity=True,
-                       eccentricity=True,
-                       feret_diameter=True,
-                       major_axis_length=True,
-                       minor_axis_length=True,
-                       euler_number=True,
-                       append=False,
-                       ):
-        """
-        Construct empty pandas dataframe of properties
-
-        Parameters
-        ----------
-        brec : bool
-            Bounding rectangle
-        brec_ex : bool
-            Extended bounding rectangle
-        npixels : bool
-            Number of pixels in the grain.
-        npixels_gb : bool
-            Number of pixels on the grain boundary.
-        area : bool
-            Area of the grain: number of pixels in the
-            grain * pixel area.
-        eq_diameter : bool
-            Equivalent circle diameter.
-        perimeter : bool
-            Perimeter of the grain boundary.
-            DEF: `Total length of all lines  passing through the centres
-            of grain boundary pixels taken in order`
-        perimeter_crofton : bool
-            Crofton type perimeter of the grain boundary.
-        compactness : bool
-            Compactness of the grain.
-            DEF: `(pixel area) / (Area of circle with perimeter equal to
-                                  grain perimeter)`.
-        gb_length_px : bool
-            Deprecated use. Not recommended.
-        aspect_ratio : bool
-            Aspect ratio of the grain.
-            Calculated as the ratio of major axis length to minor axis
-            length of a ellipse fit to the grain.
-        solidity : bool
-            Solidity of the grain.
-            DEF: `(npixels) / (number of pixels falling inside
-                               the convex hull computed on the grain)`
-        morph_ori : bool
-            Morphological orientation of the grain (in deg).
-            DEF: `-pi/2 to +pi/2. Counter-clockwise from x-axis`
-        circularity : bool
-            Indicate how close the grain shape is to being circular.
-        eccentricity : bool
-            Eccentricity of the grain.
-            DEF: `(distance between focal points) / (major axis length)`
-        feret_diameter : bool
-            Average Feret diameter of the grain. Also called Caliper
-            diameter
-            NOTE: The name Caliper diameter is not explicitly used inside
-            UPXO.
-            DEF: Feret, or Caliper diameter is essentially the perpendicular
-            distance between the two parallel lines running parallel to the
-            grain boundary. Consequently, it is bounded by a minimum and a
-            maximum value. `<Df> = Df_max / Df_min`, where `Df_max` and
-            `Df_min` are the maximum and minimum Feret diamater.
-        major_axis_length : bool
-            Major axis length of the ellipse fit to the grain.
-        minor_axis_length : bool
-            Minor axis length of the ellipse fit to the grain.
-        euler_number : bool
-            Euler number of the grain.
-            Will be 1 for grains without island grains.
-        append : bool
-            DESCRIPTION
-
-
-        Returns
-        -------
-        None.
-
-        """
-        if not append:
-            import pandas as pd
-            # Make new Pandas dataframe
-            self.prop_flag = {'npixels': npixels,
-                              'npixels_gb': npixels_gb,
-                              'area': area,
-                              'eq_diameter': eq_diameter,
-                              'perimeter': perimeter,
-                              'perimeter_crofton': perimeter_crofton,
-                              'compactness': compactness,
-                              'gb_length_px': gb_length_px,
-                              'aspect_ratio': aspect_ratio,
-                              'solidity': solidity,
-                              'morph_ori': morph_ori,
-                              'circularity': circularity,
-                              'eccentricity': eccentricity,
-                              'feret_diameter': feret_diameter,
-                              'major_axis_length': major_axis_length,
-                              'minor_axis_length': minor_axis_length,
-                              'euler_number': euler_number
-                              }
-            _columns = [key for key in self.prop_flag.keys()
-                        if self.prop_flag[key]]
-            self.prop = pd.DataFrame(columns=_columns)
-            self.prop_stat = pd.DataFrame(columns=_columns)
-
-    def char_morph_2d(self,
-                      brec=True,
-                      brec_ex=True,
-                      npixels=True,
-                      npixels_gb=True,
-                      area=True,
-                      eq_diameter=True,
-                      perimeter=True,
-                      perimeter_crofton=True,
-                      compactness=True,
-                      gb_length_px=True,
-                      aspect_ratio=True,
-                      solidity=True,
-                      morph_ori=True,
-                      circularity=True,
-                      eccentricity=True,
-                      feret_diameter=True,
-                      major_axis_length=True,
-                      minor_axis_length=True,
-                      euler_number=True,
-                      append=False,
-                      ):
+    def char_morph_2d(self, brec=True, brec_ex=True, npixels=True,
+                      npixels_gb=True, area=True, eq_diameter=True,
+                      perimeter=True, perimeter_crofton=True,
+                      compactness=True, gb_length_px=True, aspect_ratio=True,
+                      solidity=True, morph_ori=True, circularity=True,
+                      eccentricity=True, feret_diameter=True,
+                      major_axis_length=True, minor_axis_length=True,
+                      euler_number=True, append=False, ):
         """
         This method allows user to calculate morphological parameters
         of a given grain structure slice.
@@ -637,69 +361,50 @@ class mcgs2_grain_structure():
 
         """
         # Make data holder for properties
-        self.make_prop2d_df(brec=brec,
-                            brec_ex=brec_ex,
-                            npixels=npixels,
-                            npixels_gb=npixels_gb,
-                            area=area,
-                            eq_diameter=eq_diameter,
-                            perimeter=perimeter,
-                            perimeter_crofton=perimeter_crofton,
-                            compactness=compactness,
-                            gb_length_px=gb_length_px,
-                            aspect_ratio=aspect_ratio,
-                            solidity=solidity,
-                            morph_ori=morph_ori,
-                            circularity=circularity,
-                            eccentricity=eccentricity,
-                            feret_diameter=feret_diameter,
-                            major_axis_length=major_axis_length,
-                            minor_axis_length=minor_axis_length,
-                            euler_number=euler_number,
-                            append=append,
-                            )
-        # Find one property at a time
-        # npixels, area, eq_diameter, gb_length_px = [], [], [], []
-        # aspect_ratio, solidity, morph_ori = [], [], []
-        # circularity, eccentricity, feret_diameter = [], [], []
-        # major_axis_length, minor_axis_length = [], []
-        # euler_number, perimeter, perimeter_crofton = [], [], []
-        # compactness, npixels_gb = [], []
+        __ = pd_templates()
+        __a, __b, __c = __.make_prop2d_df(brec=brec,
+                                          brec_ex=brec_ex,
+                                          npixels=npixels,
+                                          npixels_gb=npixels_gb,
+                                          area=area,
+                                          eq_diameter=eq_diameter,
+                                          perimeter=perimeter,
+                                          perimeter_crofton=perimeter_crofton,
+                                          compactness=compactness,
+                                          gb_length_px=gb_length_px,
+                                          aspect_ratio=aspect_ratio,
+                                          solidity=solidity,
+                                          morph_ori=morph_ori,
+                                          circularity=circularity,
+                                          eccentricity=eccentricity,
+                                          feret_diameter=feret_diameter,
+                                          major_axis_length=major_axis_length,
+                                          minor_axis_length=minor_axis_length,
+                                          euler_number=euler_number,
+                                          append=append, )
         # ---------------------------------------------
-        # from mcgs import grain2d
-        from upxo.xtal.mcgrain2d_definitions import grain2d
+        self.prop_flag, self.prop, self.prop_stat = __a, __b, __c
         # ---------------------------------------------
-        from skimage.measure import regionprops
+        Rlab, Clab = self.lgi.shape[0], self.lgi.shape[1]
         # ---------------------------------------------
-        Rlab = self.lgi.shape[0]
-        Clab = self.lgi.shape[1]
-        # ---------------------------------------------
-        print('////////////////////////////////')
-        print('Extracting requested grain structure properties across all available states')
+        print(40*'-',
+              '\nExtracting requested GS props across all available states')
         for s in self.s_gid.keys():
-            #if self.display_messages:
             print(f"     State value: {s}")
-            # Extract s values which contain grains
-            # s_gid_vals_npy = list(self.s_gid.values())
-
-            # nonNone = np.argwhere(np.array(list(self.s_gid.values())) != None)
-            # s_gid_vals_npy = [s_gid_vals_npy[i] for i in np.squeeze(nonNone)]
-            # s_gid_keys_npy = np.array(list(self.s_gid.keys()))
-            # s_gid_keys_npy = s_gid_keys_npy[np.squeeze(nonNone)]
-
-            s_gid_keys_npy = [skey for skey in self.s_gid.keys() if self.s_gid[skey]]
+            s_gid_keys_npy = [skey for skey in self.s_gid.keys()
+                              if self.s_gid[skey]]
             # ---------------------------------------------
             sn = 1
             for state in s_gid_keys_npy:
                 grains = self.s_gid[state]
                 # Iterate through each grain of this state value
                 for gn in grains:
-                    _, lab = cv2.connectedComponents(np.array(self.lgi == gn,
-                                                              dtype=np.uint8))
+                    _, L = cv2.connectedComponents(np.array(self.lgi == gn,
+                                                            dtype=np.uint8))
                     self.g[gn] = {'s': state,
                                   'grain': grain2d()}
                     self.g[gn]['grain'].gid = gn
-                    locations = np.argwhere(lab == 1)
+                    locations = np.argwhere(L == 1)
                     self.g[gn]['grain'].loc = locations
                     _ = locations.T
                     self.g[gn]['grain'].xmin = _[0].min()
@@ -725,166 +430,42 @@ class mcgs2_grain_structure():
                     self.g[gn]['grain'].gbloc = deepcopy(gb)
                     # ---------------------------------------------
                     # Extract bounding rectangle
-                    Rlab = lab.shape[0]
-                    Clab = lab.shape[1]
-
-                    # PXGS.gs[4].lgi
-                    # labels = np.array(PXGS.gs[4].lgi==4, dtype = int)
-
-                    rmin = np.where(lab == 1)[0].min()
-                    rmax = np.where(lab == 1)[0].max()+1
-                    cmin = np.where(lab == 1)[1].min()
-                    cmax = np.where(lab == 1)[1].max()+1
-
+                    Rlab = L.shape[0]
+                    Clab = L.shape[1]
+                    # ---------------------------------------------
+                    rmin = np.where(L == 1)[0].min()
+                    rmax = np.where(L == 1)[0].max()+1
+                    cmin = np.where(L == 1)[1].min()
+                    cmax = np.where(L == 1)[1].max()+1
+                    # ---------------------------------------------
                     rmin_ex = rmin - int(rmin != 0)
                     rmax_ex = rmax + int(rmin != Rlab)
                     cmin_ex = cmin - int(cmin != 0)
                     cmax_ex = cmax + int(cmax != Clab)
                     # Store the bounds of the bounding box
-                    self.g[gn]['grain'].bbox_bounds = [rmin,
-                                                       rmax,
-                                                       cmin,
-                                                       cmax]
+                    self.g[gn]['grain'].bbox_bounds = [rmin, rmax,
+                                                       cmin, cmax]
                     # Store the bounds of the extended bounding box
-                    self.g[gn]['grain'].bbox_ex_bounds = [rmin_ex,
-                                                          rmax_ex,
-                                                          cmin_ex,
-                                                          cmax_ex]
+                    self.g[gn]['grain'].bbox_ex_bounds = [rmin_ex, rmax_ex,
+                                                          cmin_ex, cmax_ex]
                     # Store bounding box
-                    self.g[gn]['grain'].bbox = np.array(lab[rmin:rmax,
-                                                            cmin:cmax],
+                    self.g[gn]['grain'].bbox = np.array(L[rmin:rmax,
+                                                          cmin:cmax],
                                                         dtype=np.uint8)
                     # Store the extended bounding box
-                    self.g[gn]['grain'].bbox_ex = np.array(lab[rmin_ex:rmax_ex,
-                                                               cmin_ex:cmax_ex],
+                    self.g[gn]['grain'].bbox_ex = np.array(L[rmin_ex:rmax_ex,
+                                                             cmin_ex:cmax_ex],
                                                            dtype=np.uint8)
                     # Store the scikit-image regionproperties generator
                     self.g[gn]['grain'].make_prop(regionprops, skprop=True)
-                    self.g[gn]['grain'].coords=np.array([[self.xgr[ij[0], ij[1]],
-                                                          self.ygr[ij[0], ij[1]]]
-                                                         for ij in self.g[gn]['grain'].loc])
-        print('////////////////////////////////\n\n\n')
+                    __ = np.array([[self.xgr[ij[0], ij[1]],
+                                    self.ygr[ij[0], ij[1]]]
+                                   for ij in self.g[gn]['grain'].loc])
+                    self.g[gn]['grain'].coords = __
+        print(40*'-')
         self.build_prop()
         self.are_properties_available = True
         self.char_grain_positions_2d()
-
-    def make_prop3d_df(self,
-                       bcub=True,
-                       bcub_ex=True,
-                       npixels=True,
-                       npixels_gb=True,
-                       npixels_gbe=True,
-                       npixels_gbjp=True,
-                       volume=True,
-                       volumeGeo=True,
-                       areas=True,
-                       sphere_eq_diameter=True,
-                       elfita=True,
-                       elfitb=True,
-                       elfitc=True,
-                       aspect_ratio_ab=True,
-                       aspect_ratio_bc=True,
-                       aspect_ratio_ac=True,
-                       solidity=True,
-                       append=False,
-                       ):
-        """
-        bcub
-        bcub_ex
-        npixels
-        npixels_gb
-        npixels_gbe
-        npixels_gbjp
-        volume
-        volumeGeo
-        areas
-        sphere_eq_diameter
-        elfita
-        elfitb
-        elfitc
-        aspect_ratio_ab
-        aspect_ratio_bc
-        aspect_ratio_ac
-        solidity
-
-        Construct empty pandas dataframe of properties needed for 3D grain
-        structure
-
-        Parameters
-        ----------
-        bcub : bool
-            Bounding cuboid. np.array
-        bcub_ex : bool
-            Extended bounding cuboid. np.array
-        npixels : bool
-            Number of pixels in the grain. int
-        npixels_gb : bool
-            Number of pixels on the grain boundary surface. int
-        npixels_gbe : bool
-            Number of pixels on grain boundary edge. int
-        npixels_gbjp : bool
-            Number of pixels on grain boundary junction points. int
-        volume : bool
-            Pixellated volume of the grains. float
-            npixels * pixel_volume
-        volumeGeo : bool
-            Geometric volume of the grains. This is calculayed using
-            boundary surface extraction, triangulation and smoothing
-            operations. float
-        areas : bool
-            Areas of the grain boundary surfaces. This is calculated using
-            boundary surface extraction, triangulation and smoothing
-            operations.
-        sphere_eq_diameter : bool
-            Equivalent sphere diameter.
-        ellfita : bool
-            Maximum axis length a of ellipsoidal fit. float
-        ellfitb : bool
-            INtermediate axis length b of ellipsoidal fit. float
-        ellfitc : bool
-            Minimum axis length c of ellipsoidal fit. float
-        ellori: bool
-            Morphological orientation of the ellipsoidal fit. np.array
-        aspect_ratio_ab : bool
-            ellfita/ellfitb
-        aspect_ratio_bc : bool
-            ellfitb/ellfitc
-        aspect_ratio_ac : bool
-            ellfita/ellfitc
-        solidity : bool
-            Solidity of the grain calculated as the ratio of p[ixel volume to
-            total convex hull volume
-
-        Returns
-        -------
-        None.
-
-        """
-        if not append:
-            import pandas as pd
-            # Make new Pandas dataframe
-            self.prop_flag = {'bcub': bcub,
-                              'bcub_ex': bcub_ex,
-                              'npixels': npixels,
-                              'npixels_gb': npixels_gb,
-                              'npixels_gbe': npixels_gbe,
-                              'npixels_gbjp': npixels_gbjp,
-                              'volume': volume,
-                              'volumeGeo': volumeGeo,
-                              'areas': areas,
-                              'sphere_eq_diameter': sphere_eq_diameter,
-                              'elfita': elfita,
-                              'elfitb': elfitb,
-                              'elfitc': elfitc,
-                              'aspect_ratio_ab': aspect_ratio_ab,
-                              'aspect_ratio_bc': aspect_ratio_bc,
-                              'aspect_ratio_ac': aspect_ratio_ac,
-                              'solidity': solidity,
-                              }
-            _columns = [key for key in self.prop_flag.keys()
-                        if self.prop_flag[key]]
-            self.prop = pd.DataFrame(columns=_columns)
-            self.prop_stat = pd.DataFrame(columns=_columns)
 
     def __setup__positions__(self):
         self.positions = {'top_left': [], 'bottom_left': [],
@@ -892,12 +473,10 @@ class mcgs2_grain_structure():
                           'pure_right': [], 'pure_bottom': [],
                           'pure_left': [], 'pure_top': [],
                           'left': [], 'bottom': [], 'right': [], 'top': [],
-                          'boundary': [], 'corner': [], 'internal': []
-                          }
+                          'boundary': [], 'corner': [], 'internal': [], }
 
     def char_grain_positions_2d(self):
-        row_max = self.lgi.shape[0]-1
-        col_max = self.lgi.shape[1]-1
+        row_max, col_max = self.lgi.shape[0]-1, self.lgi.shape[1]-1
         for grain in self:
             # Calculate normalized centroids serving as numerical position
             # values
@@ -1310,9 +889,11 @@ class mcgs2_grain_structure():
                         print(f'     {count}. {prop_name}')
                     count += 1
                 print("\n")
-                print("Storing all requested grain structure properties to pandas dataframe")
+                print("Storing all requested grain structure properties "
+                      "to pandas dataframe")
             else:
-                print("No properties calulated as none were requested. Skipped")
+                print("No properties calulated as none were requested."
+                      " Skipped")
 
     def docu(self):
         print("ACCESS-1:")
@@ -1323,16 +904,19 @@ class mcgs2_grain_structure():
         print("---------")
         print("You can access all state-partitioned properties as:")
         print("    >> PXGS.gs[M].s_prop(s, PROP_NAME)")
-        print('    Here, M: requested requested nth temporal slice of grain structure\n')
+        print('    Here, M: requested requested nth temporal slice of grain'
+              ' structure\n')
         print("          s: Desired state value\n")
 
         print('BASIC STATS:')
         print('------------')
         print("You can readily extract some basic statstics as:")
         print("    >> PXGS.gs[M].prop['area'].describe()[STAT_PARAMETER_NAME]")
-        print('    Here, M: requested requested nth temporal slice of grain structure\n')
+        print('    Here, M: requested requested nth temporal slice of grain '
+              'structure\n')
         print("    Permitted STAT_PARAMETER_NAME are:")
-        print("    'count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max'\n")
+        print("    'count', 'mean', 'std', 'min', '25%', '50%', '75%',"
+              " 'max'\n")
 
         print("DATA VISUALIZATION:")
         print("-------------------")
@@ -1348,18 +932,16 @@ class mcgs2_grain_structure():
 
         print('FURTHER DATA EXTRACTION:')
         print('------------------------')
-        print('You can extract further grain properties as permitted by: ''skimage.measure.regionprops'', as:')
+        print("You can extract further grain properties as permitted by: "
+              "''skimage.measure.regionprops'', as:")
         print("    >> PXGS.gs[M].g[Ng]['grain'].PROP_NAME")
         print("    Here, M: temporal slice")
         print("          Ng: nth grain")
         print("          PROP_NAME: as permitted by sckit-image")
-        print("    REF: https://github.com/scikit-image/scikit-image/blob/v0.21.0/skimage/measure/_regionprops.py#L1046-L1329")
+        print("    REF: https://github.com/scikit-image/scikit-image/blob/"
+              "v0.21.0/skimage/measure/_regionprops.py#L1046-L1329")
 
-    def get_stat(self,
-                 PROP_NAME,
-                 saa=True,
-                 throw=False,
-                 ):
+    def get_stat(self, PROP_NAME, saa=True, throw=False, ):
         """
         Calculates ths statistics of a property in the 'prop' attribute.
 
@@ -1457,12 +1039,8 @@ class mcgs2_grain_structure():
         if throw:
             return metrics
 
-    def make_valid_prop(self,
-                        PROP_NAME='aspect_ratio',
-                        rem_nan=True,
-                        rem_inf=True,
-                        PROP_df_column = None,
-                        ):
+    def make_valid_prop(self, PROP_NAME='aspect_ratio',
+                        rem_nan=True, rem_inf=True, PROP_df_column=None, ):
         """
         Remove invalid entries from a column in a Pandas dataframe and
         returns sanitized pandas column with the PROP_NAME as column name
@@ -1498,7 +1076,8 @@ class mcgs2_grain_structure():
                     ratio = (_prop_size_-subset.size)/_prop_size_
                 else:
                     subset, ratio = None, None
-                    print(f"Property {PROP_NAME} has not been calculated in temporal slice {self.m}")
+                    print(f"Property {PROP_NAME} has not been calculated in"
+                          " temporal slice {self.m}")
             else:
                 subset, ratio = None, None
                 print(f"Temporal slice {self.m} has no prop. Skipped")
@@ -1547,17 +1126,19 @@ class mcgs2_grain_structure():
         if hasattr(self, 'prop'):
             if PROP_NAME in self.prop.columns:
                 if s in self.s_gid.keys():
-                    PROP_VALUES_VALID = self.make_valid_prop(rem_nan=True,
-                                                             rem_inf=True,
-                                                             PROP_df_column = self.prop[PROP_NAME],
-                                                             )
+                    # __ = self.make_valid_prop(rem_nan=True,
+                    #                           rem_inf=True,
+                    #                           PROP_df_column=self.prop[PROP_NAME], )
+                    # PROP_VALUES_VALID = __
                     subset = self.prop[PROP_NAME].iloc[[i-1 for i in self.s_gid[s]]]
                 else:
                     subset = None
-                    print(f"Temporal slice {self.m} has no grains in s: {s}. Skipped")
+                    print(f"Temporal slice {self.m} has no grains in s:"
+                          " {s}. Skipped")
             else:
                 subset, ratio = None, None
-                print(f"Property {PROP_NAME} has not been calculated in temporal slice {self.m}")
+                print(f"Property {PROP_NAME} has not been calculated in "
+                      "temporal slice {self.m}")
         else:
             print(f"Temporal slice {self.m} has no prop. Skipped")
         return subset
@@ -1723,10 +1304,7 @@ class mcgs2_grain_structure():
         # -----------------------------------------
         return lgi_masked, masker
 
-    def mask_s_with_gids(self,
-                         gids,
-                         masker=-10,
-                         force_masker=False):
+    def mask_s_with_gids(self, gids, masker=-10, force_masker=False):
         """
         Mask the s (PXGS.gs[n] specific s array) against user input grain
         indices
@@ -1780,20 +1358,15 @@ class mcgs2_grain_structure():
         # -----------------------------------------
         return s_masked, masker
 
-    def plotgs(self, figsize=(6,6)):
+    def plotgs(self, figsize=(6, 6)):
         plt.figure(figsize=figsize)
         plt.imshow(self.s)
         plt.title(f"tslice={self.m}")
         plt.xlabel(r"X-axis, $\mu m$", fontsize=12)
         plt.ylabel(r"Y-axis, $\mu m$", fontsize=12)
 
-
-    def plot_grains_gids(self,
-                         gids,
-                         gclr='color',
-                         title="user grains",
-                         cmap_name='CMRmap_r'
-                         ):
+    def plot_grains_gids(self, gids, gclr='color', title="user grains",
+                         cmap_name='CMRmap_r', ):
         """
 
 
@@ -2123,10 +1696,10 @@ class mcgs2_grain_structure():
         boundary_array = self.positions[position]
         pseudos = np.arange(-len(boundary_array), 0)
         for pseudo, ba in zip(pseudos, boundary_array):
-            LGI[LGI==ba] = pseudo
+            LGI[LGI == ba] = pseudo
         LGI[LGI > 0] = 0
         for i, pseudo in enumerate(pseudos):
-            LGI[LGI==pseudo] = boundary_array[i]
+            LGI[LGI == pseudo] = boundary_array[i]
         plt.figure()
         plt.imshow(LGI)
         if overlay_centroids:
@@ -2146,30 +1719,12 @@ class mcgs2_grain_structure():
         for label in np.unique(self.lgi):
             pass
 
-
-    def hist(self,
-             PROP_NAME=None,
-             bins=20,
-             kde=True,
-             bw_adjust=None,
-             stat='density',
-             color='blue',
-             edgecolor='black',
-             alpha=1.0,
-             line_kws={'color': 'k',
-                        'lw': 2,
-                        'ls': '-'
-                        },
-             auto_xbounds=True,
-             auto_ybounds=True,
-             xbounds=[0, 50],
-             ybounds=[0, 0.2],
-             peaks=False,
-             height=0,
-             prominance=0.2,
-             __stack_call__=False,
-             __tslice__=None
-             ):
+    def hist(self, PROP_NAME=None, bins=20, kde=True, bw_adjust=None,
+             stat='density', color='blue', edgecolor='black', alpha=1.0,
+             line_kws={'color': 'k', 'lw': 2, 'ls': '-'},
+             auto_xbounds=True, auto_ybounds=True,
+             xbounds=[0, 50], ybounds=[0, 0.2], peaks=False, height=0,
+             prominance=0.2, __stack_call__=False, __tslice__=None, ):
         if self.are_properties_available:
             if PROP_NAME in self.prop.columns:
                 self.prop[PROP_NAME].replace([-np.inf, np.inf],
@@ -2283,10 +1838,7 @@ class mcgs2_grain_structure():
         else:
             print(f"PROP_NAME: {PROP_NAME} has not yet been caluclated. Skipped")
 
-    def kde(self,
-            PROP_NAMES,
-            bw_adjust,
-            ):
+    def kde(self, PROP_NAMES, bw_adjust, ):
         print(PROP_NAMES)
         for PROP_NAME in PROP_NAMES:
             if PROP_NAME in self.prop.columns:
@@ -2305,12 +1857,8 @@ class mcgs2_grain_structure():
             if PROP_NAME == PROP_NAMES[-1]:
                 plt.show()
 
-    def plot_histograms(self,
-                        props=['area',
-                               'perimeter',
-                               'orientation',
-                               'solidity',
-                               ],
+    def plot_histograms(self, props=['area', 'perimeter',
+                                     'orientation', 'solidity', ],
                         ncolumns=3):
         if self.prop:
             properties = []
@@ -2335,10 +1883,7 @@ class mcgs2_grain_structure():
                 plt.axis('on')
             plt.show()
 
-    def femesh(self,
-               saa=True,
-               throw=False,
-               ):
+    def femesh(self, saa=True, throw=False, ):
         '''
         Set up finite element mesh of the poly-xtal
         Use saa=True to update grain structure mesh atttribute
@@ -2368,6 +1913,7 @@ class mcgs2_grain_structure():
             else:
                 return 'Please enter valid saa and throw arguments'
     # --------------------------------------------------------------------
+
     @property
     def pxtal_length(self):
         return self.uigrid.xmax-self.uigrid.xmin+self.uigrid.xinc
@@ -2521,7 +2067,7 @@ class mcgs2_grain_structure():
     @property
     def locations(self):
         return [grain.position for grain in self]
-    # --------------------------------------------------------------------
+
     @property
     def perimeters(self):
         characteristic_length = math.sqrt(self.px_size)
@@ -2590,9 +2136,10 @@ class mcgs2_grain_structure():
                  self.mp['gc'].locy,
                  'ko',
                  markersize=6)
-        plt.xlabel('x-axis $\mu m$', fontdict={'fontsize':12} )
-        plt.ylabel('y-axis $\mu m$', fontdict={'fontsize':12} )
-        plt.title(f"MCGS tslice:{self.m}.\nUPXO.mulpoint2d of grain centroids", fontdict={'fontsize':12})
+        plt.xlabel('x-axis $\mu m$', fontdict={'fontsize': 12})
+        plt.ylabel('y-axis $\mu m$', fontdict={'fontsize': 12})
+        plt.title(f"MCGS tslice:{self.m}.\nUPXO.mulpoint2d of grain centroids",
+                  fontdict={'fontsize': 12})
         plt.show()
 
     def vtgs2d(self, visualize=True):
@@ -2610,17 +2157,12 @@ class mcgs2_grain_structure():
                             vis_vtgs=visualize
                             )
         if visualize:
-            self.vtgs.plot(dpi = 100,
-                           default_par_faces = {'clr': 'teal', 'alpha': 1.0, },
-                           default_par_lines = {'width': 1.5, 'clr': 'black', },
-                           xtal_marker_vertex = True,
-                           xtal_marker_centroid = True
-                           )
+            self.vtgs.plot(dpi=100,
+                           default_par_faces={'clr': 'teal', 'alpha': 1.0, },
+                           default_par_lines={'width': 1.5, 'clr': 'black', },
+                           xtal_marker_vertex=True, xtal_marker_centroid=True)
 
-    def ebsd_write_ctf(self,
-                       folder='upxo_ctf',
-                       file='ctf.ctf'):
-
+    def ebsd_write_ctf(self, folder='upxo_ctf', file='ctf.ctf'):
         x = np.arange(0, 100.1, 2.5)
         y = np.arange(0, 100.1, 2.5)
         X, Y = np.meshgrid(x, y)
@@ -2659,50 +2201,6 @@ class mcgs2_grain_structure():
                     f.write(f"1 {x} {y} {phi1} {psi} {phi2}\n")
         f.close()
 
-    def export_vtk3d(self, grid: dict, grid_fields: dict, file_path: str, file_name: str, add_suffix: bool = True) -> None:
-            """
-            Export data to .vtk format.
-
-            Parameters
-            ----------
-            grid : dict
-                The grid dictionary containing the grid points.
-                grid = {"x": xgr, "y": ygr, "z": zgr}
-            grid_fields : dict
-                The grid fields dictionary containing the grid fields.
-                grid_fields = {"state_matrix": state_matrix,
-                  "gid_matrix": gid_matrix}
-            file_path : str
-                The path where the .vtk file will be saved.
-            file_name : str
-                The name of the .vtk file.
-            add_suffix : bool, optional
-                If True, the suffix '_upxo' will be added at the end of the file name.
-                This is advised to enable distinguishing any .vtk files you may create using
-                applications such as Dream3D etc. The default is True.
-
-            Returns
-            -------
-            None.
-
-            """
-            try:
-                import pyvista as pv
-            except ModuleNotFoundError:
-                raise ModuleNotFoundError("pyvista is not installed. Please install it using 'pip install pyvista'.")
-                return
-
-            full_file_name = os.path.join(file_path, file_name + ("_upxo.vtk" if add_suffix else ".vtk"))
-
-            try:
-                grid = pv.StructuredGrid(grid['x'], grid['y'], grid['z'])
-                grid["values"] = grid_fields['state_matrix'].flatten(order="F")  # Flatten in Fortran order to match VTK's indexing
-                grid["gid_values"] = grid_fields['gid_matrix'].flatten(order="F")  # Flatten in Fortran order to match VTK's indexing
-                grid.save(full_file_name)
-            except IOError as e:
-                print(f"Error saving VTK file: {e}")
-
-
     def export_vtk2d(self):
         pass
 
@@ -2733,80 +2231,6 @@ class mcgs2_grain_structure():
         """
 
         pass
-
-    def extract_slice_from3d(self,
-                             mstep,
-                             sliceNormal=[0, 0, 1],
-                             sliceLocation=0,
-                             outputFormat='grid',
-                             metaData={'projectName':'UPXOProject',
-                                       'author': 'UPXO',
-                                       'nphases': 1,
-                                       'phase1': 'Copper',
-                                       }
-                             ):
-        """
-        This method helps extract a 2D slice from 3D grain structure database.
-
-        Parameters
-        ----------
-        mstep : int
-            Monte-Carlo time step
-        sliceNormal : list/tuple, optional
-            Normal vector to the slice plane. The default is [0, 0, 1],
-            meaning slicing along plane normal to z-axis.
-        sliceLocation : float, optional
-            Bounds: [0, 100]. Value is percentage. If the grid size is 20x30x40
-            , sliceNormal is [0, 0, 1], then a sliceLocation of 40%
-            will create a slice at a location of z=16. The default is 50.
-        outputFormat : 'str', optional
-            Specify the data format needed. Options are 'grid', 'ctf', 'vtk'
-            and 'upxo_gs'. The default is 'grid'.
-            * If 'grid', return will be a dictionary with the keys, 'x',
-            'y', 'z', 'S' and 'lgi', with corresponding values.
-            * If 'ctf', return will be a dictionary having keys 'folderPath' and
-            'filename', indicating the written .ctf file.
-            * If 'upxo_gs', a upxo grain structure database will be created,
-            grains will be identified afresh.
-        metaData : TYPE, optional
-            DESCRIPTION. The default is {'projectName':'UPXOProject',
-                                         'author': 'UPXO',
-                                         'nphases': 1,
-                                         'phase1': 'Copper',
-                                         }.
-        Returns
-        -------
-        slice_2d : TYPE
-            DESCRIPTION.
-        """
-        nonxyz = 1
-        if sliceNormal[0]==1 and sliceNormal[1]==0 and sliceNormal[2]==0:
-            # SLice normal is x
-            nonxyz = 0
-            pass
-        elif sliceNormal[0]==0 and sliceNormal[1]==1 and sliceNormal[2]==0:
-            # SLice normal is y
-            nonxyz = 0
-            pass
-        elif sliceNormal[0]==0 and sliceNormal[1]==0 and sliceNormal[2]==1:
-            # SLice normal is z
-            nonxyz = 0
-            pass
-        else:
-            nonxyz = 1
-            # Use PyVista here
-            # Step 1: Validate sliceNormal
-            # Step 2: Use the PyVista model of 3D GS
-            # Step 3: Extract the slice as (x, y, z, S, gid)
-            pass
-        #------------------------------
-        if outputFormat=='grid':
-            # Convert slice_2d to grid format and return
-            pass
-        elif outputFormat=='ctf':
-            # Convert slice_2d to ctf format and return
-            pass
-        return slice_2d
 
     def export_slices(self,
                       xboundPer,
@@ -2902,11 +2326,9 @@ class mcgs2_grain_structure():
                            fileFormats,
                            overwrite)
         """
-        from scipy.ndimage import label, generate_binary_structure
-        import math
-        xsz = math.floor((self.uigrid.xmax-self.uigrid.xmin)/self.uigrid.xinc);
-        ysz = math.floor((self.uigrid.ymax-self.uigrid.ymin)/self.uigrid.yinc);
-        zsz = math.floor((self.uigrid.zmax-self.uigrid.zmin)/self.uigrid.zinc);
+        xsz = math.floor((self.uigrid.xmax-self.uigrid.xmin)/self.uigrid.xinc)
+        ysz = math.floor((self.uigrid.ymax-self.uigrid.ymin)/self.uigrid.yinc)
+        zsz = math.floor((self.uigrid.zmax-self.uigrid.zmin)/self.uigrid.zinc)
         Smax = self.uisim.S;
         slices = list(range(0, 9, sliceStepSize))
         phase_name = 1;
@@ -2944,24 +2366,4 @@ class mcgs2_grain_structure():
                    filePath,
                    fileName,
                    convertUPXOgs=True):
-        pass
-
-    def update_dream3d_ABQ_file(self):
-        """
-        Take Eralp's code Dream3D2Abaqus and update it to also write:
-            * element sets (or make them as groups) for:
-                . texture partitioned grains
-                . grain area binned grains
-                . aspect ratio binned grains
-                . boundary grains
-                . internal grains
-                . grain boundary surface elements
-                . grain boundary edge elements
-                . grain boundary junction point elements
-                .
-        Returns
-        -------
-        None.
-
-        """
         pass
