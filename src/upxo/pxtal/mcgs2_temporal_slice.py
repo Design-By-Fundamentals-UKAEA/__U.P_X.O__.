@@ -114,13 +114,17 @@ class mcgs2_grain_structure():
                  'positions', 'mp', 'vtgs', 'mesh', 'px_size', 'dim',
                  'prop_flag', 'prop', 'are_properties_available', 'prop_stat',
                  '__gi__', '__ui', 'display_messages', 'info',
-                 'print_interval_bool', 'EAPGLB', 'EASGLB',)
+                 'print_interval_bool', 'EAPGLB', 'EASGLB',
+                 '__ori_assign_status_stack__', '__ori_assign_status_slice__',
+                 )
     EPS = 1e-12
     __maxGridSizeToIgnoreStoringGrids = 250**2
 
     def __init__(self, dim=2, m=None, uidata=None, S_total=None, px_size=None,
                  xgr=None, ygr=None, zgr=None, uigrid=None, uimesh=None,
-                 EAPGLB=None):
+                 EAPGLB=None, assign_ori_stack=False, assign_ori_slice=True,
+                 oripert_tc=True, oripert_gr=True
+                 ):
         self.__ui = uidata
         self.dim, self.m, self.S, self.px_size = 2, m, S_total, px_size
         self.uigrid, self.uimesh = uigrid, uimesh
@@ -132,12 +136,64 @@ class mcgs2_grain_structure():
         self.EAPGLB = {}
         self.EAPGLB['statewise'] = EAPGLB
         self.EASGLB = self.EAPGLB
-        # Above EASGLB needs to be updated in the orinetation mapping stagre
+        # Above EASGLB needs to be updated in the orinetation mapping stage
         self.mp = dict_templates.mulpnt_gs2d
         self.xgr, self.ygr = xgr, ygr
-        self.are_properties_available = False
-        self.display_messages = False
+        self.are_properties_available, self.display_messages = False, False
         self.__setup__positions__()
+        if assign_ori_stack:
+            self.__ori_assign_status_stack__ = {'status': False,
+                                                'info': 'to be developed'}
+        if assign_ori_slice:
+            __info = "..-t:u-s:u-..-ru-..-d:c-..-ea:s-.."
+            self.__ori_assign_status_slice__ = {'status': True,
+                                                'info': __info}
+            # DOCUMENTATION:
+            '''
+            status: True or False
+            info options:
+                "..-t:u-s:u-..-ru-..-d:c-..-ea:s-.."
+                        Temporally Spatially Untracked, Random perturbation,
+                        Cartesian, Euler angle Sepoerate.
+                    -t:u-s:u-
+                        No temporal tracking, as noi relationshiop between gid
+                        and spatial location of gids is tracked !
+                    -ru-
+                        Perturbations will be introduced randomly, respectivng
+                        uniformity (i.e. uniform random numbers..)
+                    -d:c-
+                        Cartesian distance measure employed. No consideration
+                        will be paid to the crystallographic misorientations
+                        and symmetries. Rather, the perturbation would be the
+                        Cartesian distance from the mean state wise assigned
+                        orientation.
+                    -ea:s-
+                        Euler angle Seperate. EA1, EA2 and EA3 will have
+                        different levels of perturbations.
+
+                    EXPLANATION:
+                        Orientations are assigned afresh for each temporal
+                        slice, on top of the orientations in self.EAPGLB. This
+                        is done by introducung perturbations. Perturbations
+                        are defined two ways: state wise and euler angle wise,
+                        which are expolained later. As a consequence, for
+                        non-zero perturbation values, spatial ori distr in a
+                        gs temporal slice have no relationship between previosu
+                        and next temporal slices. Example: a smaller grain in a
+                        previous temporal, which has now grow in sizew in the
+                        current temporal slice may have a completely different
+                        crys. ori. in the present temporal slice. The distance
+                        of this difference, however, is defined by the max
+                        perturbation values, used by the user.
+            if TRUE, the following will be considered
+            oripert_tc:
+                Template: {'bool': True/False,
+                           glb_pert_min_ea1=0, glb_pert_max_ea1=7.5,
+                           glb_pert_min_ea2=0, glb_pert_max_ea2=7.5,
+                           glb_pert_min_ea3=0, glb_pert_max_ea3=7.5,
+                           }
+            oripert_gr
+            '''
 
     def __iter__(self):
         self.__gi__ = 1

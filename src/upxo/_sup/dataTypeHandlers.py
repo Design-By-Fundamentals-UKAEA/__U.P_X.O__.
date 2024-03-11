@@ -31,7 +31,7 @@ This module contains the following functions:
     . coords_to_UpxoPointList
 
 NOTE: NOT TO BE SHARED WITH ANYONE OTHER THAN:
-    *@UKAEA: Vaasu Anandatheertha, Chris Hardie, Vikram Phalke
+    *@UKAEA: Sunil Anandatheertha, Chris Hardie, Vikram Phalke
     *@UKAEA:  Ben Poole, Allan Harte, Cori Hamelin
     *@OX,UKAEA:  Eralp Demir, Ed Tarleton
 """
@@ -42,6 +42,7 @@ __developers__ = ["Vaasu Anandatheertha (vaasu.anandatheertha@ukaea.uk)",
 __maintainers__ = ["Vaasu Anandatheertha (vaasu.anandatheertha@ukaea.uk)",
                    ]
 __version__ = ["0.1.from.301222.git-no", "0.2.from.030123.git-yes"
+               "0.3.from.11032024.git-yes"
                ]
 
 from dataclasses import dataclass
@@ -54,7 +55,7 @@ from numpy.random import uniform as npru
 from scipy.spatial import cKDTree as ckdt
 from upxo._sup import dataTypeHandlers as dth
 # import datatype_handlers as dth
-import pandas as pd
+# import pandas as pd
 # from point2d_04 import point2d
 
 
