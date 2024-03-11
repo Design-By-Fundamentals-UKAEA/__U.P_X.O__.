@@ -22,6 +22,23 @@ class dict_templates():
                           'pure_right': None, 'pure_top': None, },
                 'rp': None, 'jp2': None, 'jp3': None, }
 
+    def vizstyles_mcgs(self):
+        return {'hist_colors_fill': "#4CC9F0",
+                'hist_colors_edge': 'black',
+                'hist_colors_fill_alpha': 0.5,
+                'kde_color': 'crimson',
+                'kde_thickness': 1,
+                'bins': 25,
+                'hist_area_xbounds': [0, 100],
+                'hist_area_ybounds_density': [0, 0.2],
+                'hist_area_ybounds_freq': [0, 50],
+                'hist_area_ybounds_counts': [0, 50],
+                'hist_peri_xbounds': [0, 100],
+                'hist_peri_ybounds_density': [0, 0.2],
+                'hist_peri_ybounds_freq': [0, 50],
+                'hist_peri_ybounds_counts': [0, 50],
+                }
+
 
 class pd_templates():
 
