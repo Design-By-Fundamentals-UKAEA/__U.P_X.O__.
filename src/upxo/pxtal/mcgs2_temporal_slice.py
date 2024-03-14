@@ -2260,33 +2260,16 @@ class mcgs2_grain_structure():
     def export_vtk2d(self):
         pass
 
-    def export_ctf(self,
-                   filePath,
-                   metaData
-                   ):
-        """
+    def export_ctf(self, filePath):
+        from upxo._sup.export_data import ctf
+        ctf = ctf()
+        ctf.load_header_file()
+        ctf.make_header_from_lines()
+        ctf.set_phase_name(phase_name='COPPER')
+        ctf.set_grid(self.xgr, self.ygr)
+        ctf.set_state(self.S, self.s)
+        ctf.set_grid_data(field_data='rand')
 
-
-        Parameters
-        ----------
-        filePath : str
-            Provide the full path to the file. str following the last filesep
-            should be filename.ctf
-        metaData : dict
-            Dictionary of ctf file header information. Example:
-            {'projectName':'UPXOProject',
-             'author': 'UPXO',
-             'nphases': 1,
-             'phase1': 'Copper',
-             }
-
-        Returns
-        -------
-        None.
-
-        """
-
-        pass
 
     def export_slices(self,
                       xboundPer,

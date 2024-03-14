@@ -373,8 +373,7 @@ _ea_ += _pm_*_del_
         # Create the Euler angle - mcstate value mapper arrays
         self.ea1, self.ea2, self.ea3 = np.random.uniform([0, 0, 0],
                                                          [360, 180, 360],
-                                                         (self.nstates,
-                                                          3)).T
+                                                         (self.nstates, 3)).T
         # ------------------------------------
         # Create the bc and bs - mcstate value mapper arrays
         _bc_ = np.random.randint(0, 255, (self.nstates, ))
@@ -393,7 +392,7 @@ _ea_ += _pm_*_del_
         self.error = np.zeros(self.hgrid.shape, dtype=int)
         # ------------------------------------
         # Create MAD values b/w 0.3 and 0.4
-        self.mad = 0.3+0.1*np.random.random((self.hgrid.size, ))
+        self.mad = 0.3+0.1*np.random.random(self.hgrid.shape)
         # ------------------------------------
         # Create bands arrays
         self.bands = np.random.randint(7, 10, self.hgrid.shape)
@@ -418,18 +417,20 @@ _ea_ += _pm_*_del_
             self.gen_rand_grid_field_data()
 
     def assemble_grid_data(self):
-        return np.vstack((ctf.hgrid.ravel(),
-                          ctf.vgrid.ravel(),
-                          ctf.bands.ravel(),
-                          ctf.error.ravel(),
-                          ctf.euler1.ravel(),
-                          ctf.euler2.ravel(),
-                          ctf.euler3.ravel(),
-                          ctf.mad.ravel(),
-                          ctf.bc.ravel(),
-                          ctf.bs.ravel(),
-                          )
-                         )
+        ctf_numerical_data = np.vstack((self.phase.ravel(),
+                                        self.hgrid.ravel(),
+                                        self.vgrid.ravel(),
+                                        self.bands.ravel(),
+                                        self.error.ravel(),
+                                        self.euler1.ravel(),
+                                        self.euler2.ravel(),
+                                        self.euler3.ravel(),
+                                        self.mad.ravel(),
+                                        self.bc.ravel(),
+                                        self.bs.ravel(),
+                                        )
+                                       )
+        return ctf_numerical_data
 
     def plot_ea_map(self, term=[1, 0, 0]):
         """
