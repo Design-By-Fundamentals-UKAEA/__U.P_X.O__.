@@ -148,7 +148,7 @@ class mcgs2_grain_structure():
             __info = "..-t:u-s:u-..-ru-..-d:c-..-ea:s-.."
             self.__ori_assign_status_slice__ = {'status': True,
                                                 'info': __info}
-            # DOCUMENTATION:
+            # DOCUMENTATION:ad
             '''
             status: True or False
             info options:
