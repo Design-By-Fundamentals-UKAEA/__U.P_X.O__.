@@ -4,10 +4,10 @@ import numpy.random as rand
 from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as GS2d
 
 
-def run(uisim, uiint, uidata, uigrid,
-        xgr, ygr, zgr, px_size,
-        _a, _b, _c, S, AIA0, AIA1, display_messages):
-    # ---------------------------------------------
+def run(xgr=None, ygr=None, zgr=None, px_size=None,
+        S=None, _a=None, _b=None, _c=None, AIA0=None, AIA1=None,
+        uisim=None, uiint=None, uidata=None, uigrid=None, uimesh=None,
+        EAPGLB=None, display_messages=None):
     print("Using SA's L0 modified Q-state Pott's model: ")
     print('|' + 15*'-'+' MC SIM RUN IN PROGRESS on: ALG202' + 15*'-' + '|')
     gs = {}
@@ -16,7 +16,7 @@ def run(uisim, uiint, uidata, uigrid,
     fully_annealed_at_m = None
     for m in range(uisim.mcsteps):
         if S.min() == S.max():
-            print(30*'.')
+            print(32*'.')
             print(f'Single crystal achieved at iteration {m}.')
             fully_annealed, fully_annealed_at_m = True, m
             # Store the last temporal slice as a UPXO grain structure by
@@ -89,12 +89,14 @@ def run(uisim, uiint, uidata, uigrid,
         if m==0 or cond_1 or fully_annealed:
             gs[m] = GS2d(m=m,
                          dim=uigrid.dim,
-                         uidata=uidata,
                          px_size=px_size,
                          S_total=uisim.S,
                          xgr=xgr,
                          ygr=ygr,
                          uigrid=uigrid,
+                         uidata=uidata,
+                         uimesh=uimesh,
+                         EAPGLB=EAPGLB
                          )
             gs[m].s = deepcopy(S)
             save_msg = True

@@ -57,6 +57,7 @@ from upxo.pxtal.mcgs2_temporal_slice import mcgs2_grain_structure as _GS_
 from upxo._sup import gops
 # from ..interfaces.os import package_check as pkgChk
 from upxo._sup import dataTypeHandlers as dth
+from upxo._sup.data_templates import dict_templates
 from upxo.pxtalops import detect_grains_from_mcstates as get_grains
 # from ..geoEntities import mulpoint2d
 __authors__ = ["Vaasu Anandatheertha"]
@@ -138,7 +139,7 @@ class grid():
                  'xind' 'yind', 'zind', 'xinda', 'yinda', 'zinda',
                  'NLM_nd', 'NLM', 'EAPGLB',
                  'tslices_with_prop', 'vis', 'vizstyles', 'display_messages',
-                 '__info_message_display_level__'
+                 '__info_message_display_level__', 'dt_dict'
                  )
 
     def __init__(self,
@@ -159,6 +160,7 @@ class grid():
             self.__ui = uidata_all
             self.uidata_all = uidata_all
             self.EA = None
+            self.dt_dict = dict_templates()
             self.initiate()
         elif study in ('para_sweep'):
             # Parameters to be manually set
@@ -414,21 +416,7 @@ class grid():
         # ----------------------------------------
         self.tslices_with_prop = []
         # ----------------------------------------
-        self.vizstyles = {'hist_colors_fill': "#4CC9F0",
-                          'hist_colors_edge': 'black',
-                          'hist_colors_fill_alpha': 0.5,
-                          'kde_color': 'crimson',
-                          'kde_thickness': 1,
-                          'bins': 25,
-                          'hist_area_xbounds': [0, 100],
-                          'hist_area_ybounds_density': [0, 0.2],
-                          'hist_area_ybounds_freq': [0, 50],
-                          'hist_area_ybounds_counts': [0, 50],
-                          'hist_peri_xbounds': [0, 100],
-                          'hist_peri_ybounds_density': [0, 0.2],
-                          'hist_peri_ybounds_freq': [0, 50],
-                          'hist_peri_ybounds_counts': [0, 50],
-                          }
+        self.vizstyles = self.dt_dict.vizstyles_mcgs()
         self.display_messages = True
 
     def build_ea(self):
@@ -1068,22 +1056,25 @@ class grid():
             if m == 0:
                 self.gs = {m: _GS_(m=m,
                                    dim=dim,
-                                   uidata=self.__ui,
                                    px_size=self.px_size,
                                    S_total=self.uisim.S,
                                    xgr=self.xgr,
                                    ygr=self.ygr,
+                                   uidata=self.__ui,
                                    uigrid=self.uigrid,
+                                   uimesh=self.uimesh,
                                    EAPGLB=self.EAPGLB)}
             else:
+                # THIS BRNACH NEVER REACHED ANYWAYS. TO BE DEPRECATED !!
                 self.gs[m] = _GS_(m=m,
                                   dim=dim,
-                                  uidata=self.__ui,
                                   px_size=self.px_size,
                                   S_total=self.uisim.S,
                                   xgr=self.xgr,
                                   ygr=self.ygr,
+                                  uidata=self.__ui,
                                   uigrid=self.uigrid,
+                                  uimesh=self.uimesh,
                                   EAPGLB=self.EAPGLB)
         elif study == 'parameter_sweep':
             xgr, ygr, npixels = self.uigrid.grid
@@ -1817,31 +1808,65 @@ class monte_carlo_grain_structure(grid):
 
     def start_algo2d_without_hops(self):
         _a, _b, _c = self.build_NLM()  # Unpack 3 rows of NLM
+        _dm_ = self.display_messages
         if self.uisim.mcalg == '200':
             import upxo.algorithms.alg200 as alg200
-            self.gs, fully_annealed = alg200.run(self.uisim, self.uiint,
-                                            self.uidata_all, self.uigrid,
-                                            self.xgr, self.ygr, self.zgr,
-                                            self.px_size, _a, _b, _c,
-                                            self.S, self.AIA0, self.AIA1,
-                                            self.display_messages)
+            self.gs, fully_annealed = alg200.run(xgr=self.xgr,
+                                                 ygr=self.ygr,
+                                                 zgr=self.zgr,
+                                                 px_size=self.px_size,
+                                                 S=self.S,
+                                                 _a=_a,
+                                                 _b=_b,
+                                                 _c=_c,
+                                                 AIA0=self.AIA0,
+                                                 AIA1=self.AIA1,
+                                                 uisim=self.uisim,
+                                                 uiint=self.uiint,
+                                                 uidata=self.uidata_all,
+                                                 uigrid=self.uigrid,
+                                                 uimesh=self.uimesh,
+                                                 EAPGLB=self.EAPGLB,
+                                                 display_messages=_dm_, )
         elif self.uisim.mcalg == '201':
             import upxo.algorithms.alg201 as alg201
-            self.gs, fully_annealed = alg201.run(self.uisim, self.uiint,
-                                            self.uidata_all, self.uigrid,
-                                            self.xgr, self.ygr, self.zgr,
-                                            self.px_size, _a, _b, _c,
-                                            self.S, self.AIA0, self.AIA1,
-                                            self.display_messages)
+            self.gs, fully_annealed = alg201.run(xgr=self.xgr,
+                                                 ygr=self.ygr,
+                                                 zgr=self.zgr,
+                                                 px_size=self.px_size,
+                                                 S=self.S,
+                                                 _a=_a,
+                                                 _b=_b,
+                                                 _c=_c,
+                                                 AIA0=self.AIA0,
+                                                 AIA1=self.AIA1,
+                                                 uisim=self.uisim,
+                                                 uiint=self.uiint,
+                                                 uidata=self.uidata_all,
+                                                 uigrid=self.uigrid,
+                                                 uimesh=self.uimesh,
+                                                 EAPGLB=self.EAPGLB,
+                                                 display_messages=_dm_, )
         elif self.uisim.mcalg == '202':
             print("    weighted (: ALG-202)")
             import upxo.algorithms.alg202 as alg202
-            self.gs, fully_annealed = alg202.run(self.uisim, self.uiint,
-                                            self.uidata_all, self.uigrid,
-                                            self.xgr, self.ygr, self.zgr,
-                                            self.px_size, _a, _b, _c,
-                                            self.S, self.AIA0, self.AIA1,
-                                            self.display_messages)
+            self.gs, fully_annealed = alg202.run(xgr=self.xgr,
+                                                 ygr=self.ygr,
+                                                 zgr=self.zgr,
+                                                 px_size=self.px_size,
+                                                 S=self.S,
+                                                 _a=_a,
+                                                 _b=_b,
+                                                 _c=_c,
+                                                 AIA0=self.AIA0,
+                                                 AIA1=self.AIA1,
+                                                 uisim=self.uisim,
+                                                 uiint=self.uiint,
+                                                 uidata=self.uidata_all,
+                                                 uigrid=self.uigrid,
+                                                 uimesh=self.uimesh,
+                                                 EAPGLB=self.EAPGLB,
+                                                 display_messages=_dm_, )
         # Update the tslices to accommodate the fully_annealed condition, if
         # it is achieved during simulation
         if fully_annealed['fully_annealed']:
