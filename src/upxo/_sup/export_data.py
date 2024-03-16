@@ -15,6 +15,7 @@ __doc__ = "Store data used to export grain structures"
 
 import os
 import numpy as np
+from pathlib import Path
 import matplotlib.pyplot as plt
 from upxo.interfaces.os.osops import get_path_UPXOwriterdataDIR
 from upxo.interfaces.os.osops import get_file_path
@@ -84,7 +85,7 @@ class ctf():
     __slots__ = ('root', 'path', 'header', 'header_lines', 'data_format',
                  'val', 'phase_name', 'phase', 'hgrid', 'vgrid', 'nstates',
                  'mcstates', 'euler1', 'euler2', 'euler3', 'bands', 'error',
-                 'mad', 'bc', 'bs', 'ea1', 'ea2', 'ea3')
+                 'mad', 'bc', 'bs', 'ea1', 'ea2', 'ea3', 'data_format', 'H')
 
     def __init__(self):
         self.root = os.getcwd()
@@ -94,6 +95,22 @@ class ctf():
         self.euler1 = self.euler2 = self.euler3 = None
         self.bands = self.error = self.mad = self.bc = self.bs = None
         self.val = _validation()
+        self.data_format = "{phase}\t{x:.3f}\t{y:.3f}\t{bands}\t{error}\t{euler1:.5f}\t{euler2:.5f}\t{euler3:.5f}\t{mad:.5f}\t{bc}\t{bs}"
+        self.H = """Channel Text File
+Prj\tUPXO_Synthetic_Grain_Structure
+Author\tDr. Sunil Anandatheertha
+JobMode\tGrid
+XCells\t{}
+YCells\t{}
+XStep\t1.0
+YStep\t1.0
+AcqE1\t0
+AcqE2\t0
+AcqE3\t0
+Euler angles refer to Sample Coordinate system (CS0)!	Mag	0.0000	Coverage	0	Device	0	KV	0.0000	TiltAngle	0.0000	TiltAxis	0	DetectorOrientationE1	0.0000	DetectorOrientationE2	0.0000	DetectorOrientationE3	0.0000	WorkingDistance	0.0000	InsertionDistance	0.0000
+Phases\t1
+3.614;3.614;3.614	90.000;90.000;90.000	Copper	11	0			Created from UPXO
+Phase	X	Y	Bands	Error	Euler1	Euler2	Euler3	MAD	BC	BS"""
 
     def __repr__(self):
         return "UPXO.ctf"
@@ -124,6 +141,7 @@ class ctf():
         try:
             with open(self.path/hfile, 'r', encoding='utf-8') as file:
                 self.header_lines = file.readlines()
+                print("CTF header read successful")
         except FileNotFoundError:
             print(f"The file {self.path} does not exist.")
         except Exception as e:
@@ -133,6 +151,7 @@ class ctf():
         '''Set phase_name attributes'''
         self.val.valstrs((phase_name, ))
         self.phase_name = phase_name
+        print(f'Phase name set to {phase_name}.')
 
     def set_metadata(self, **kwargs):
         """
@@ -168,6 +187,7 @@ class ctf():
         '''Set hgrid and vgrid attributes'''
         self.val.valnparrs_nelem(hgrid, vgrid)
         self.hgrid, self.vgrid = hgrid, vgrid
+        print('Coordinate grid setup successfull.')
 
     def set_phase(self, phase):
         '''Set phase attributes'''
@@ -179,6 +199,7 @@ class ctf():
         self.val.valnparrs_nelem(self.hgrid, mcstates)
         self.nstates = nstates
         self.mcstates = mcstates
+        print('State set successfull.')
 
     def set_bands(self, bands):
         '''Set bands attributes'''
@@ -199,6 +220,7 @@ class ctf():
 
     def make_header_from_lines(self):
         self.header = ''.join(self.header_lines)
+        print('Header lines creation successful.')
 
     def add_misori(self,
                    glb_pert_min_ea1=0, glb_pert_max_ea1=7.5,
@@ -361,6 +383,7 @@ _ea_ += _pm_*_del_
             grain id.
             2. Update the CTF header information about the new phase
         '''
+        print('Setting state-mapped random field data specification.')
         self.phase = np.ones_like(self.hgrid, dtype=float)
         # ------------------------------------
         # Initiate all oher arrays
@@ -373,8 +396,7 @@ _ea_ += _pm_*_del_
         # Create the Euler angle - mcstate value mapper arrays
         self.ea1, self.ea2, self.ea3 = np.random.uniform([0, 0, 0],
                                                          [360, 180, 360],
-                                                         (self.nstates,
-                                                          3)).T
+                                                         (self.nstates, 3)).T
         # ------------------------------------
         # Create the bc and bs - mcstate value mapper arrays
         _bc_ = np.random.randint(0, 255, (self.nstates, ))
@@ -393,10 +415,11 @@ _ea_ += _pm_*_del_
         self.error = np.zeros(self.hgrid.shape, dtype=int)
         # ------------------------------------
         # Create MAD values b/w 0.3 and 0.4
-        self.mad = 0.3+0.1*np.random.random((self.hgrid.size, ))
+        self.mad = 0.3+0.1*np.random.random(self.hgrid.shape)
         # ------------------------------------
         # Create bands arrays
         self.bands = np.random.randint(7, 10, self.hgrid.shape)
+        print('Field data specification succeffsul.')
 
     def format_header(self):
         '''Format the header to required size'''
@@ -418,18 +441,50 @@ _ea_ += _pm_*_del_
             self.gen_rand_grid_field_data()
 
     def assemble_grid_data(self):
-        return np.vstack((ctf.hgrid.ravel(),
-                          ctf.vgrid.ravel(),
-                          ctf.bands.ravel(),
-                          ctf.error.ravel(),
-                          ctf.euler1.ravel(),
-                          ctf.euler2.ravel(),
-                          ctf.euler3.ravel(),
-                          ctf.mad.ravel(),
-                          ctf.bc.ravel(),
-                          ctf.bs.ravel(),
-                          )
-                         )
+        ctf_numerical_data = np.vstack((self.phase.ravel(),
+                                        self.hgrid.ravel(),
+                                        self.vgrid.ravel(),
+                                        self.bands.ravel(),
+                                        self.error.ravel(),
+                                        self.euler1.ravel(),
+                                        self.euler2.ravel(),
+                                        self.euler3.ravel(),
+                                        self.mad.ravel(),
+                                        self.bc.ravel(),
+                                        self.bs.ravel(),
+                                        )
+                                       )
+        print('CTF coordinate-field data assembly successfull.')
+        return ctf_numerical_data
+
+    def write_ctf_file(self, fileName):
+        nc, nr = self.hgrid.shape
+        # data_lines = [self.header.format(nc, nr)]
+        data_lines = [self.H.format(nc, nr)]
+        for r in range(nr):
+            for c in range(nc):
+                # Preparing data line
+                data_line = self.data_format.format(phase=self.phase[r][c],
+                                                    x=self.hgrid[r][c],
+                                                    y=self.vgrid[r][c],
+                                                    bands=self.bands[r][c],
+                                                    error=self.error[r][c],
+                                                    euler1=self.euler1[r][c],
+                                                    euler2=self.euler2[r][c],
+                                                    euler3=self.euler3[r][c],
+                                                    mad=self.mad[r][c],
+                                                    bc=self.bc[r][c],
+                                                    bs=self.bs[r][c])
+                data_lines.append(data_line)
+        # Join all data
+        ctf_data = "\n".join(data_lines)
+        filePathBase = Path(r"C:\Development\M2MatMod\upxo_packaged\upxo_private\src\upxo\_written_data\_ctf_export_2dmcgs")
+        file_path = filePathBase / f"{fileName}.ctf"
+
+        # Writing the data to a .ctf file
+        with open(file_path, 'w') as file:
+            file.write(ctf_data)
+            print(file_path)
 
     def plot_ea_map(self, term=[1, 0, 0]):
         """

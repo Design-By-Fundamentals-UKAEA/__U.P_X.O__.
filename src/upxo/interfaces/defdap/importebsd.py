@@ -1,7 +1,12 @@
 from copy import deepcopy
 import numpy as np
+import defdap.ebsd as defDap_ebsd
+from defdap.quat import Quat
 
 class ebsd_data():
+    """
+
+    """
     __slots__ = ('map_raw',
                  'map',
                  'gid',
@@ -9,18 +14,15 @@ class ebsd_data():
                  'prop',
                  'n',
                  'quat_avg',
-                 'filename'
-                 )
+                 'fileName')
     def __init__(self,
-                 filename=None,
+                 fileName=None,
                  ):
-        from defdap.quat import Quat
-        self.filename = filename  # Cugrid_after 2nd_15kv_2kx_2
+        self.fileName = fileName  # Cugrid_after 2nd_15kv_2kx_2
         self.load_ctf()
 
     def load_ctf(self):
-        import defdap.ebsd as DEFDAP_EBSD
-        self.map_raw = DEFDAP_EBSD.Map(self.filename,
+        self.map_raw = defDap_ebsd.Map(self.fileName,
                                        dataType="OxfordText")
         self.map = deepcopy(self.map_raw)
 

@@ -1194,7 +1194,7 @@ class grid():
                       mcsteps=None,
                       kernel_order=2,
                       store_state_ng=True,
-                      library=None
+                      library='scikit-image'
                       ):
         """
         Detect grains in microstructure images using specified image processing

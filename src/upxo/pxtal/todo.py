@@ -1,9 +1,4 @@
 """
-https://porespy.org/examples/generators/tutorials/making_blobs.html
-https://www.open3d.org/docs/release/tutorial/geometry/mesh.html
-https://docs.scipy.org/doc/scipy/tutorial/ndimage.html#object-measurements
-https://scikit-image.org/skimage-tutorials/lectures/three_dimensional_image_processing.html
-
 LHF -- Low Hanging Fruit
 FOL -- Make this First On the List
 ================================================
