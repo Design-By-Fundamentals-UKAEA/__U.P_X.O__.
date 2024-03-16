@@ -6,6 +6,7 @@ import seaborn as sns
 from copy import deepcopy
 from typing import Iterable
 import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
 from skimage.measure import regionprops
 # from skimage.measure import label as skim_label
 # from upxo.geoEntities.point2d import point2d
@@ -522,6 +523,79 @@ class mcgs2_grain_structure():
         self.build_prop()
         self.are_properties_available = True
         self.char_grain_positions_2d()
+
+    def finer(self,
+              Grid_Data,
+              ParentStateMatrix,
+              Factor,
+              InterpMethod):
+        # Use to increase resolution
+        # Unpack parent grid parameters
+        xmin, xmax, xinc = Grid_Data['xmin'], Grid_Data['xmax'], Grid_Data['xinc']
+        ymin, ymax, yinc = Grid_Data['ymin'], Grid_Data['ymax'], Grid_Data['yinc']
+
+        # Reconstruct the original parent co-ordinate grid
+        xvec_OG = np.arange(xmin, xmax+1, float(xinc))  # Parent grid axes
+        yvec_OG = np.arange(ymin, ymax+1, float(yinc))  # Parent grid axes
+        cogrid_OG = np.meshgrid(xvec_OG, yvec_OG, copy=True, sparse=False, indexing='xy')  # grid
+
+        # Construct the new co-ordinate grid
+        xvec_NG = np.arange(xmin, xmax+1, float(xinc/Factor))  # NM: 'of' New grid
+        yvec_NG = np.arange(ymin, ymax+1, float(yinc/Factor))
+        cogrid_NG = np.meshgrid(xvec_NG, yvec_NG, copy=True, sparse=False, indexing='xy')
+
+        # Construct the new orientation state matrix
+        OSM_NG = np.round(griddata((np.concatenate(cogrid_OG[0]),
+                                    np.concatenate(cogrid_OG[1])),
+                                   np.concatenate(ParentStateMatrix),
+                                   (np.concatenate(cogrid_NG[0]),
+                                    np.concatenate(cogrid_NG[1])),
+                                   method=InterpMethod)
+                          .reshape((xvec_NG.shape[0], yvec_NG.shape[0])))
+        SMIN = np.min(ParentStateMatrix)
+        SMAX = np.max(ParentStateMatrix)
+        for i in range(np.shape(OSM_NG)[0]):
+            for j in range(np.shape(OSM_NG)[1]):
+                if OSM_NG[i, j] < SMIN:
+                    OSM_NG[i, j] = SMIN
+                elif OSM_NG[i, j] > SMAX:
+                    OSM_NG[i, j] = SMAX
+                elif np.isnan(OSM_NG[i, j]):
+                    OSM_NG[i, j] = 1
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        return cogrid_NG, OSM_NG
+
+    def coarser(self,
+                Grid_Data,
+                ParentStateMatrix,
+                Factor,
+                InterpMethod):
+        # Use to decrease resolution
+        # Unpack parent grid parameters
+        xmin, xmax, xinc = Grid_Data['xmin'], Grid_Data['xmax'], Grid_Data['xinc']
+        ymin, ymax, yinc = Grid_Data['ymin'], Grid_Data['ymax'], Grid_Data['yinc']
+
+        # Reconstruct the parent co-ordinate grid
+        xvec_OG = np.arange(xmin, xmax+1, float(xinc))  # Parent grid axes
+        yvec_OG = np.arange(ymin, ymax+1, float(yinc))  # Parent grid axes
+        cogrid_OG = np.meshgrid(xvec_OG, yvec_OG, copy=True, sparse=False, indexing='xy')  # grid
+
+        # Construct the new co-ordinate grid
+        xvec_NG = np.arange(xmin, xmax+1, float(xinc*Factor))  # NG: 'of' New grid
+        yvec_NG = np.arange(ymin, ymax+1, float(yinc*Factor))
+        cogrid_NG = np.meshgrid(xvec_NG, yvec_NG, copy=True, sparse=False, indexing='xy')
+
+        # Construct the new orientation state matrix
+        OSM_NG = np.round(griddata((np.concatenate(cogrid_OG[0]),
+                                    np.concatenate(cogrid_OG[1])),
+                                   np.concatenate(ParentStateMatrix),
+                                   (np.concatenate(cogrid_NG[0]),
+                                    np.concatenate(cogrid_NG[1])),
+                                   method=InterpMethod)
+                          .reshape((xvec_NG.shape[0], yvec_NG.shape[0])))
+        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        # print(abc.shape)
+        return cogrid_NG, OSM_NG
 
     def __setup__positions__(self):
         self.positions = {'top_left': [], 'bottom_left': [],
