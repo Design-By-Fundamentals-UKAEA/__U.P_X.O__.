@@ -7,6 +7,7 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 from scipy.ndimage import generic_filter
 from meshpy.triangle import MeshInfo, build
+from scipy.interpolate import RegularGridInterpolator
 from upxo._sup.export_data import ctf
 from upxo.ggrowth.mcgs import monte_carlo_grain_structure as mcgs
 # =====================================================================
@@ -18,6 +19,8 @@ hgrid = pxt.gs[8].xgr
 vgrid = pxt.gs[8].ygr
 mcstates = pxt.gs[8].s
 nstates = pxt.uisim.S
+# =====================================================================
+pxt.gs[8].scale(sf=2)
 # =====================================================================
 # Find junction points:
 def find_junctions(pixel_values):
