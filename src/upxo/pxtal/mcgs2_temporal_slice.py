@@ -8,6 +8,7 @@ from typing import Iterable
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from skimage.measure import regionprops
+from scipy.interpolate import RegularGridInterpolator
 # from skimage.measure import label as skim_label
 # from upxo.geoEntities.point2d import point2d
 # from scipy.ndimage import label, generate_binary_structure
@@ -117,6 +118,7 @@ class mcgs2_grain_structure():
                  '__gi__', '__ui', 'display_messages', 'info',
                  'print_interval_bool', 'EAPGLB', 'EASGLB',
                  '__ori_assign_status_stack__', '__ori_assign_status_slice__',
+                 'scaled', 'scaled_gs', '__resolution_state__',
                  )
     EPS = 1e-12
     __maxGridSizeToIgnoreStoringGrids = 250**2
@@ -124,11 +126,11 @@ class mcgs2_grain_structure():
     def __init__(self, dim=2, m=None, uidata=None, S_total=None, px_size=None,
                  xgr=None, ygr=None, zgr=None, uigrid=None, uimesh=None,
                  EAPGLB=None, assign_ori_stack=False, assign_ori_slice=True,
-                 oripert_tc=True, oripert_gr=True
-                 ):
+                 oripert_tc=True, oripert_gr=True):
         self.__ui = uidata
         self.dim, self.m, self.S, self.px_size = 2, m, S_total, px_size
         self.uigrid, self.uimesh = uigrid, uimesh
+        self.xgr, self.ygr = xgr, ygr
         self.set__spart_flag(S_total)
         self.set__s_gid(S_total)
         self.set__gid_s()
@@ -139,7 +141,10 @@ class mcgs2_grain_structure():
         self.EASGLB = self.EAPGLB
         # Above EASGLB needs to be updated in the orinetation mapping stage
         self.mp = dict_templates.mulpnt_gs2d
-        self.xgr, self.ygr = xgr, ygr
+        self.scaled = {'xmin': None, 'xmax': None, 'xinc': None, 'xgr': None,
+                       'ymin': None, 'ymax': None, 'yinc': None, 'ygr': None,
+                       's': None, 'grains': None, 'prop': None}
+        self.scaled_gs = None
         self.are_properties_available, self.display_messages = False, False
         self.__setup__positions__()
         if assign_ori_stack:
@@ -151,6 +156,7 @@ class mcgs2_grain_structure():
                                                 'info': __info}
             # DOCUMENTATION:ad
             '''
+            # TODO: REPLACE THIS LONG NAME BY SIMPLER ALPHA-NUMERIC CODES
             status: True or False
             info options:
                 "..-t:u-s:u-..-ru-..-d:c-..-ea:s-.."
@@ -335,7 +341,7 @@ class mcgs2_grain_structure():
                       solidity=True, morph_ori=True, circularity=True,
                       eccentricity=True, feret_diameter=True,
                       major_axis_length=True, minor_axis_length=True,
-                      euler_number=True, append=False, ):
+                      euler_number=True, append=False, saa=True, throw=False):
         """
         This method allows user to calculate morphological parameters
         of a given grain structure slice.
@@ -524,46 +530,48 @@ class mcgs2_grain_structure():
         self.are_properties_available = True
         self.char_grain_positions_2d()
 
-    def finer(self,
-              Grid_Data,
-              ParentStateMatrix,
-              Factor,
-              InterpMethod):
-        # Use to increase resolution
-        # Unpack parent grid parameters
-        xmin, xmax, xinc = Grid_Data['xmin'], Grid_Data['xmax'], Grid_Data['xinc']
-        ymin, ymax, yinc = Grid_Data['ymin'], Grid_Data['ymax'], Grid_Data['yinc']
+    def __make_linear_grid(self, sf=1):
+        # Validate for maximum sf
+        # -------------------------------------------------
+        # Make the base space
+        xinc, yinc = self.uigrid.xinc*sf, self.uigrid.yinc*sf
+        xmin, xmax, xinc = self.uigrid.xmin, self.uigrid.xmax, self.uigrid.xinc
+        ymin, ymax, yinc = self.uigrid.ymin, self.uigrid.ymax, self.uigrid.yinc
+        x = np.arange(xmin, xmax+xinc, xinc)
+        y = np.arange(ymin, ymax+yinc, yinc)
+        return x, y, xinc, yinc
 
-        # Reconstruct the original parent co-ordinate grid
-        xvec_OG = np.arange(xmin, xmax+1, float(xinc))  # Parent grid axes
-        yvec_OG = np.arange(ymin, ymax+1, float(yinc))  # Parent grid axes
-        cogrid_OG = np.meshgrid(xvec_OG, yvec_OG, copy=True, sparse=False, indexing='xy')  # grid
+    def scale(self, sf):
+        """
+        Apply a scale factor to the current grain structure temporal slice.
+        """
+        # -------------------------------------------------
+        # VALIDATE input, f
+        # Make the base linear space
+        x, y, xinc, yinc = self.__make_linear_grid(sf=1)
+        # Construct the inerpolator
+        intmeth = 'nearest'
+        interpolator = RegularGridInterpolator((x, y), self.s, method=intmeth)
+        # Make the updated linear space
+        _x_, _y_, _xinc_, _yinc_ = self.__make_linear_grid(sf=sf)
+        # Make the new grid
+        _xgr_, _ygr_ = np.meshgrid(_x_, _y_)
+        # Interpolate state values
+        s = interpolator(np.array([_xgr_.flatten(), _ygr_.flatten()]).T)
+        s = s.reshape(len(_x_), len(_y_)).T
+        # ---------------------------------------------
+        # TODO: VALIDATE IF CREATED S DIMENTSIONS ARE CONSISTENT
+        # ---------------------------------------------
+        # Create a new grain structure database
+        self.scaled['sf'] = sf
+        self.scaled['xmin'], self.scaled['xmax'] = _x_.min(), _x_.max()
+        self.scaled['ymin'], self.scaled['ymax'] = _y_.min(), _y_.max()
+        self.scaled['xinc'], self.scaled['yinc'] = _xinc_, _yinc_
+        self.scaled.xgr, self.scaled.ygr, self.s = _xgr_, _ygr_, s
+        self.scaled.char_morph_2d()
+        if sf != 1:
+            self.__resolution_state__ = f'finer_sf={sf}'
 
-        # Construct the new co-ordinate grid
-        xvec_NG = np.arange(xmin, xmax+1, float(xinc/Factor))  # NM: 'of' New grid
-        yvec_NG = np.arange(ymin, ymax+1, float(yinc/Factor))
-        cogrid_NG = np.meshgrid(xvec_NG, yvec_NG, copy=True, sparse=False, indexing='xy')
-
-        # Construct the new orientation state matrix
-        OSM_NG = np.round(griddata((np.concatenate(cogrid_OG[0]),
-                                    np.concatenate(cogrid_OG[1])),
-                                   np.concatenate(ParentStateMatrix),
-                                   (np.concatenate(cogrid_NG[0]),
-                                    np.concatenate(cogrid_NG[1])),
-                                   method=InterpMethod)
-                          .reshape((xvec_NG.shape[0], yvec_NG.shape[0])))
-        SMIN = np.min(ParentStateMatrix)
-        SMAX = np.max(ParentStateMatrix)
-        for i in range(np.shape(OSM_NG)[0]):
-            for j in range(np.shape(OSM_NG)[1]):
-                if OSM_NG[i, j] < SMIN:
-                    OSM_NG[i, j] = SMIN
-                elif OSM_NG[i, j] > SMAX:
-                    OSM_NG[i, j] = SMAX
-                elif np.isnan(OSM_NG[i, j]):
-                    OSM_NG[i, j] = 1
-        # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        return cogrid_NG, OSM_NG
 
     def coarser(self,
                 Grid_Data,
