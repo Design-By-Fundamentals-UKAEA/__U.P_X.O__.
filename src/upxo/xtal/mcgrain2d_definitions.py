@@ -2,8 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 # import cv2
 # from skimage.measure import label as skim_label
+from scipy.spatial import cKDTree as ckdt
 import upxo._sup.gops as gops
-
+import upxo._sup.dataTypeHandlers as dth
+from upxo._sup.validation_values import _validation as val
 
 class grain2d():
     """
@@ -180,6 +182,7 @@ class grain2d():
                  'precipitates', 'grain_core', 'gb_zone', 'subgrains', 'paps',
                  'blocks', 'laths',
                  'xstruc', 'xmin', 'xmax', 'ymin', 'ymax',
+                 'loctree', 'coordtree',
                  'control_points_mesh',
                  'ea_pixels', 'quats_pixels', 'ref_quat', 'ref_ea', 'texcomp',
                  'euler1', 'euler2', 'euler3',
@@ -196,6 +199,7 @@ class grain2d():
         # set bounds related
         self.xmin, self.xmax, self.ymin, self.ymax = None, None, None, None
         self.brec, self.bbox_bounds, self.bbox_ex_bounds = None, None, None
+        self.loctree, self.coordtree = None, None
         # set masks
         self.bbox, self.bbox_ex = None, None
         # Set local neighbourhood related slots
@@ -232,6 +236,8 @@ class grain2d():
         self.lcl_pert_min_ea3, self.lcl_pert_max_ea3 = None, None
         self.texcomp = 'unknown'
 
+
+
     def __repr__(self):
         _repr_ = f'UPXO [{self.position[2]}] grain2d. GID:{self.gid}'
         _repr_ += f'-S:{self.s}'
@@ -242,28 +248,86 @@ class grain2d():
     def __len__(self):
         return len(self.loc)
 
-    def __lt__(self, _g):
-        return self.npixels < self._g.npixels
+    @val.DEC_validate_samples
+    def __eq__(self, samples=None, types=None):
+        '''
+        Allowed input datatypes:
+            A number
+            A UPXO grain2D object
+            pxt.gs[tslice].xomap.map.grainList[0].__class__.__name__
+        '''
+        # VAL: See if sampls are numbers
+        if list(types)[0] in dth.dt.NUMBERS:
+            cmp = [self.npixels == _ for _ in samples]
+        elif samples[0].__class__.__name__ == 'grain2d':  # Testing 1 is enough
+            '''UPXO grain object'''
+            cmp = [self.npixels == _.npixels for _ in samples]
+        elif samples[0].__class__.__name__ == 'Grain':  # Testing 1 is enough
+            '''DefDap grain object'''
+            cmp = [self.npixels == len(_.coordList) for _ in samples]
+        return cmp
+
+    def __ne__(self, samples=None):
+        return [not _ for _ in self.__eq__(samples=samples)]
+
+    @val.DEC_validate_samples
+    def __lt__(self, samples=None, types=None):
+        '''
+        Allowed input datatypes:
+            A number
+            A UPXO grain2D object
+            pxt.gs[tslice].xomap.map.grainList[0].__class__.__name__
+        '''
+        # VAL: See if sampls are numbers
+        if list(types)[0] in dth.dt.NUMBERS:
+            cmp = [self.npixels == _ for _ in samples]
+        elif samples[0].__class__.__name__ == 'grain2d':  # Testing 1 is enough
+            '''UPXO grain object'''
+            cmp = [self.npixels == _.npixels for _ in samples]
+        elif samples[0].__class__.__name__ == 'Grain':  # Testing 1 is enough
+            '''DefDap grain object'''
+            cmp = [self.npixels == len(_.coordList) for _ in samples]
+        return cmp
 
     def __le__(self, _grain):
+        # INCLUDE VALIDATIONS
         return self.npixels <= self._g.npixels
 
     def __gt__(self, _grain):
+        # INCLUDE VALIDATIONS
         return self.npixels > self._g.npixels
 
     def __ge__(self, _grain):
+        # INCLUDE VALIDATIONS
         return self.npixels >= self._g.npixels
 
     def __mul__(self, k):
+        # INCLUDE VALIDATIONS
         self._px_area *= k
 
     def __att__(self):
         return gops.att(self)
 
+    def __iter__(self):
+        return iter(self.loc)
+
+    def __contains__(self, points):
+        '''
+        Currently accepted points data structure
+        points = [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]]
+        '''
+        pass
+
     def set_glb_ea_pert(self, pert_ea1, pert_ea2, pert_ea3):
         self.glb_pert_min_ea1, self.glb_pert_max_ea1 = pert_ea1[0], pert_ea1[1]
         self.glb_pert_min_ea2, self.glb_pert_max_ea2 = pert_ea2[0], pert_ea2[1]
         self.glb_pert_min_ea3, self.glb_pert_max_ea3 = pert_ea3[0], pert_ea3[1]
+
+    def make_loctree(self):
+        self.loctree = ckdt(self.loc, copy_data=False, balanced_tree=True)
+
+    def make_coordtree(self):
+        self.loctree = ckdt(self.coords, copy_data=False, balanced_tree=True)
 
     def make_prop(self, generator, skprop=True):
         if skprop:
