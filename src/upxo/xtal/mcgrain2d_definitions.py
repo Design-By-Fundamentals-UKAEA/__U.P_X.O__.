@@ -1,44 +1,169 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
-from skimage.measure import label as skim_label
+# import cv2
+# from skimage.measure import label as skim_label
+import upxo._sup.gops as gops
+
 
 class grain2d():
     """
-    brec: bounding rectangle of the grain
-    bbox: bounding box
-    bbox_ex: bbox expanded (by unit pixel along permitted direction)
+    ATTRIBUTES AND THEIR ACCESS
+    ------------------------------
+    loc:
+        Grain pixel loca5tions.
+        pxt.gs[t].g[gid]['grain'].loc, pxt.gs[t].g[gid]['grain'].coords
 
-    gid: This grain ID. Same as the lgi number of this grain
-    gbid: Grain boundary ID
-    gind: Indices of grain pixel in the parent state matrix
-    gbind: Indices of grain boundary pixel in the parent state matrix
-    gbsegs_pre: Partially processed grain boundary segments
+    npixels:
+        Number of pixels in the grain
+        pxt.gs[t].g[gid]['grain'].npixels
 
-    s: State value of the grain
-    sn: Number (n) of this grain in the list of 's' stated grains
+    position:
+        Grain relative poistioning in the poly-crystal.
+        pxt.gs[t].g[gid]['grain'].position
+        initial 2 values provide x and y coord of the centroid
+        last string value provides the relative positioning of the grain
 
-    neigh: list of neighbouring grain ids --> User calculated
+    coords:
+        Explanation here
 
-    grep_cen: Geometric repr: centroid point --> User calculated
-    grep_mp: Geometric repr: UPXO multi-point object of grain boundary --> User calculated
-    grep_me: Geometric repr: UPXO multi-edge object of grain boundary --> User calculated
-    grep_ring: Geometric representation: UPXO ring object of grain boundary --> User calculated
+    gbloc:
+        grain boundary pixel locations
 
-    feat_bbox: Feature: Bounding box <<-- STORED UPON CREATION
-    feat_islands: Feature: Island grains
-    feat_gc: Feature: Grain core
-    feat_gbz: Feature: Grain boundary zone
-    feat_ell: Feature: Ellipse --> User calculated
-    feat_rec: Feature: Rectangle --> User calculated
+    bbox_bounds:
+        Bounds of the bounding box
+        pxt.gs[t].g[gid]['grain'].bbox_bounds
 
-    x_xsys: Crystal system: 'fcc', 'bcc', 'hcp': USER INPUT / EXTRACTED
-    x_phase: Phase ID: USER INPUT / EXTRACTED
-    x_mean: Mean crystallographic orientation: Bunge's Euler angle: USER INPUT / EXTRACTED
+    bbox_ex_bounds:
+        Bounds of the extended bounding box. Extended by unit pixels on all
+        sides. If grain is a boundary grain, only possible directions  will
+        be extended by unit pixel.
+        pxt.gs[t].g[gid]['grain'].bbox_ex_bounds
+    bbox:
+        Mask on bounding box.
+        pxt.gs[t].g[gid]['grain'].bbox
+    bbox_ex:
+        Mask on extended bouning box.
+        pxt.gs[t].g[gid]['grain'].bbox_ex
 
-    gbvert: Grain boundary vertices <<-- STORED UPON CREATION
-    gbseg: Grain boundary segments --> User calculated
+    skprop:
+        Scikit image property generator
+        pxt.gs[t].g[gid]['grain'].skprop
 
+    _px_area:
+        Area of a single pixel
+        pxt.gs[t].g[gid]['grain']._px_area
+
+    gid:
+        This grain ID. Same as the lgi number of this grain.
+        pxt.gs[t].g[gid]['grain'].gid
+
+    gind:
+        Indices of grain pixel in the parent state matrix
+        pxt.gs[t].g[gid]['grain'].gind
+
+    gbid:
+        Grain boundary ID
+        pxt.gs[t].g[gid]['grain'].gbid
+
+    gbind:
+        Indices of grain boundary pixel in the parent state matrix
+        pxt.gs[t].g[gid]['grain'].gbind
+
+    gbvert:
+        Grain boundary vertices
+        pxt.gs[t].g[gid]['grain'].gbvert
+
+    gbsegs:
+        grain boundary segments
+        pxt.gs[t].g[gid]['grain'].gbsegs
+
+    gbsegs_geo:
+        grain boundary segments: dict with below keys:
+        'info': OPTIONS:
+            'spg.menp': Single Pixel Grain. Multi-edge not possible
+            'slg.menp': Straight line Grain. Multi-edge not possible
+        'me': Multi-edge
+        pxt.gs[t].g[gid]['grain'].gbsegs_geo
+
+    s:
+        Monte-Car;o State value of the current grain
+        pxt.gs[t].g[gid]['grain'].s
+
+    sn:
+        pxt.gs[t].g[gid]['grain'].sn
+
+    neigh:
+        GIDs of the neighbouring grains
+        pxt.gs[t].g[gid]['grain'].neigh
+
+    precipitates:
+        Precipitates inside the present grain
+        pxt.gs[t].g[gid]['grain'].precipitates
+
+    grain_core:
+        Grain core region
+        pxt.gs[t].g[gid]['grain'].grain_core
+
+    gb_zone:
+        Grain boundary zone
+        pxt.gs[t].g[gid]['grain'].gb_zone
+
+    subgrains:
+        sub-grains inside grain. It shall also encompass any
+        island_grains
+        pxt.gs[t].g[gid]['grain'].subgrains
+
+    paps:
+        prior-austenite packats
+        pxt.gs[t].g[gid]['grain'].paps
+
+    blocks:
+        block structuers in paps
+        pxt.gs[t].g[gid]['grain'].blocks
+
+    laths:
+        Lath structures inside blocks
+        pxt.gs[t].g[gid]['grain'].laths
+
+    xstruc: Crystal Structure: 'fcc', 'bcc', 'hcp'
+
+    xmin, xmax, ymin, ymax:
+        pxt.gs[t].g[gid]['grain'].(xmin, xmax, ymin, ymax)
+
+    control_points_mesh:
+        Points places at strategic locations inside the grain to control
+        mesh density of a conformal mesh
+        pxt.gs[t].g[gid]['grain'].control_points_mesh
+
+    ea_pixels:
+        Euler snagles of all pixels
+
+    quats_pixels:
+        Quaternions of all the pixesl int he grain
+
+    ref_quat:
+        Reference quaternion value of the all pixes in the grain
+
+    ref_ea:
+        Referecne Euler angle of all the pixesl in the grain
+
+    texcomp:
+        T3exture component name to which the pixel would belong to.
+        Defined at each of the pixesl in the grain
+
+    glb_pert_min_ea1,  glb_pert_max_ea1:
+        Global minimum and maximum allowed perturbation to euler angle 1
+    glb_pert_min_ea2,  glb_pert_max_ea2:
+        Global minimum and maximum allowed perturbation to euler angle 2
+    glb_pert_min_ea3,  glb_pert_max_ea3
+        Global minimum and maximum allowed perturbation to euler angle 3
+    lcl_pert_min_ea1, lcl_pert_max_ea1:
+        Local minimum and maximum allowed perturbation to euler angle 1
+    lcl_pert_min_ea2, lcl_pert_max_ea2:
+        Local minimum and maximum allowed perturbation to euler angle 2
+    lcl_pert_min_ea3, lcl_pert_max_ea3:
+        Local minimum and maximum allowed perturbation to euler angle 3
+    --------------------------------------------------------------------------
     _xgr_min_: Minimum value of the xgr of the parent grain structure
     _xgr_max_: Maximum value of the xgr of the parent grain structure
     _xgr_incr_: Increment value of the xgr of the parent grain structure
@@ -47,76 +172,89 @@ class grain2d():
     _ygr_max_: Maximum value of the ygr of the parent grain structure
     _xgr_incr_: Increment value of the ygr of the parent grain structure
     """
-    __slots__ = ('loc',
-                 'position',
-                 'coords',
-                 'gbloc',
-                 'brec',
-                 'bbox_bounds',
-                 'bbox_ex_bounds',
-                 'bbox',
-                 'bbox_ex',
-                 'px_area',
-                 'skprop',
-                 'gid',
-                 'gbid',
-                 'gind',
-                 'gbind',
-                 'gbsegs_pre',
-                 's',
-                 'sn',
-                 'neigh',
-                 'grep_cen',
-                 'grep_mp',
-                 'grep_me',
-                 'grep_ring',
-                 'feat_bbox',
-                 'feat_islands',
-                 'feat_gc',
-                 'feat_gbz',
-                 'feat_ell',
-                 'feat_rec',
-                 'x_xsys',
-                 'x_phase',
-                 'x_mean',
-                 'gbvert',
-                 'gbseg',
-                 'xmin',
-                 'xmax',
-                 'ymin',
-                 'ymax'
+
+    __slots__ = ('loc', 'npixels', 'position', 'coords', 'gbloc', 'brec',
+                 'bbox_bounds', 'bbox_ex_bounds', 'bbox', 'bbox_ex', 'skprop',
+                 '_px_area', 'gid', 'gind', 'gbid', 'gbind', 'gbvert',
+                 'gbsegs', 'gbsegs_geo', 's', 'sn', 'neigh',
+                 'precipitates', 'grain_core', 'gb_zone', 'subgrains', 'paps',
+                 'blocks', 'laths',
+                 'xstruc', 'xmin', 'xmax', 'ymin', 'ymax',
+                 'control_points_mesh',
+                 'ea_pixels', 'quats_pixels', 'ref_quat', 'ref_ea', 'texcomp',
+                 'euler1', 'euler2', 'euler3',
+                 'glb_pert_min_ea1', 'glb_pert_max_ea1', 'glb_pert_min_ea2',
+                 'glb_pert_max_ea2', 'glb_pert_min_ea3', 'glb_pert_max_ea3',
+                 'lcl_pert_min_ea1', 'lcl_pert_max_ea1', 'lcl_pert_min_ea2',
+                 'lcl_pert_max_ea2', 'lcl_pert_min_ea3', 'lcl_pert_max_ea3',
                  )
 
     def __init__(self):
-        self.loc = None
-        self.gbloc = None
-        self.brec = None
-        self.bbox_bounds = None
-        self.bbox_ex_bounds = None
-        self.bbox = None
-        self.bbox_ex = None
-        self.px_area = None
-        self.skprop = None
-        self.gid = None
-        self.gind = None
-        self.s = None
-        self.sn = None
-        self.position = None
-        self.coords = None
-        self.xmin, self.xmax = None, None
-        self.ymin, self.ymax = None, None
+        # Set position/location related slots
+        self.loc, self.position = None, None
+        self.coords, self.gbloc = None, None
+        # set bounds related
+        self.xmin, self.xmax, self.ymin, self.ymax = None, None, None, None
+        self.brec, self.bbox_bounds, self.bbox_ex_bounds = None, None, None
+        # set masks
+        self.bbox, self.bbox_ex = None, None
+        # Set local neighbourhood related slots
+        self.neigh = None
+        # set properties
+        self.npixels, self._px_area, self.skprop = None, None, None
+        # set state related slots
+        self.s, self.sn = None, None
+        # set grain indices related slots
+        self.gid, self.gind = None, None
+        # Set grain boundary indices related slots
+        self.gbid, self.gbind = None, None
+        # Set grain boundaryt points
+        self.gbvert = None
+        # Set grain bounadryu segfments
+        self.gbsegs, self.gbsegs_geo = None, None
+        # FEATURES
+        self.precipitates, self.grain_core, self.gb_zone = None, None, None
+        self.subgrains = None
+        self.paps, self.blocks, self.laths = None, None, None
+        # MESHING RELATED DATA
+        self.control_points_mesh = None
+        # PHASE RELATED
+        self.xstruc = 'fcc'
+        # ORIENTATION RELATED
+        self.ea_pixels, self.quats_pixels = None, None
+        self.euler1, self.euler2, self.euler3 = None, None, None
+        self.ref_quat, self.ref_ea = None, None
+        self.glb_pert_min_ea1, self.glb_pert_max_ea1 = None, None
+        self.glb_pert_min_ea2, self.glb_pert_max_ea2 = None, None
+        self.glb_pert_min_ea3, self.glb_pert_max_ea3 = None, None
+        self.lcl_pert_min_ea1, self.lcl_pert_max_ea1 = None, None
+        self.lcl_pert_min_ea2, self.lcl_pert_max_ea2 = None, None
+        self.lcl_pert_min_ea3, self.lcl_pert_max_ea3 = None, None
+        self.texcomp = 'unknown'
 
-    def __str__(self):
-        return f's{self.s}, sn{self.sn}'
+    def __repr__(self):
+        _repr_ = f'UPXO [{self.position[2]}] grain2d. GID:{self.gid}'
+        _repr_ += f'-S:{self.s}'
+        _repr_ += f'-Sn:{self.sn}'
+        _repr_ += f'-Centroid:[{self.position[0]:.4f},{self.position[1]:.4f}]'
+        return _repr_
 
     def __len__(self):
         return len(self.loc)
 
+    def __lt__(self, _grain):
+        return self._grain
+
     def __mul__(self, k):
-        self.px_area *= k
+        self._px_area *= k
 
     def __att__(self):
         return gops.att(self)
+
+    def set_glb_ea_pert(self, pert_ea1, pert_ea2, pert_ea3):
+        self.glb_pert_min_ea1, self.glb_pert_max_ea1 = pert_ea1[0], pert_ea1[1]
+        self.glb_pert_min_ea2, self.glb_pert_max_ea2 = pert_ea2[0], pert_ea2[1]
+        self.glb_pert_min_ea3, self.glb_pert_max_ea3 = pert_ea3[0], pert_ea3[1]
 
     def make_prop(self, generator, skprop=True):
         if skprop:

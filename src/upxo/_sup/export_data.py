@@ -17,9 +17,9 @@ import os
 import numpy as np
 from pathlib import Path
 import matplotlib.pyplot as plt
-from upxo.interfaces.os.osops import get_path_UPXOwriterdataDIR
 from upxo.interfaces.os.osops import get_file_path
 from upxo._sup.validation_values import _validation
+from upxo.interfaces.os.osops import get_path_UPXOwriterdataDIR
 
 
 class ctf():
@@ -58,10 +58,7 @@ class ctf():
     from upxo.ggrowth.mcgs import monte_carlo_grain_structure as mcgs
     pxt = mcgs()
     pxt.simulate()
-    pxt.detect_grains(mcsteps=None,
-                      kernel_order=2,
-                      store_state_ng=True,
-                      library='scikit-image')
+    pxt.detect_grains()
 
     pxt.char_morph_2d(8)
 
@@ -281,6 +278,7 @@ Phase	X	Y	Bands	Error	Euler1	Euler2	Euler3	MAD	BC	BS"""
                 _ea_ = np.tile(np.array([ctf.ea1[s-1],
                                          ctf.ea2[s-1],
                                          ctf.ea3[s-1]]), (ngrains, 1))
+
                 # Build a random plus or minus array
                 _pm_ = np.random.choice([-1, 1], (ngrains, 3))
                 # Build EA perturations skeleton
@@ -293,6 +291,43 @@ Phase	X	Y	Bands	Error	Euler1	Euler2	Euler3	MAD	BC	BS"""
                 _ea_ += _pm_*_del_
                 eas[s] = _ea_
 
+eas = {s: None for s in S}
+for s in S:
+    if sgid[s]:
+        # GEt the number of grains belonging to this s
+        ngrains = len(sgid[s])
+        # Build EA for all grains in this s
+        _ea_ = np.tile(np.array([ctf.ea1[s-1],
+                                 ctf.ea2[s-1],
+                                 ctf.ea3[s-1]]), (ngrains, 1))
+        eas[s] = _ea_
+
+for s in S:
+    if sgid[s]:
+        for i, gid in enumerate(sgid[s], start=0):
+            locs = pxt.gs[mcstep].g[gid]['grain'].loc
+            for loc in locs:
+                ea = eas[s][i]
+                euler1[loc[0], loc[1]] = ea[0]
+                euler2[loc[0], loc[1]] = ea[1]
+                euler3[loc[0], loc[1]] = ea[2]
+
+plt.imshow((euler1+euler2+euler3)/3, cmap = 'nipy_spectral')
+
+for s in S:
+    if sgid[s]:
+        # GEt the number of grains belonging to this s
+        ngrains = len(sgid[s])
+        # Build a random plus or minus array
+        _pm_ = np.random.choice([-1, 1], (ngrains, 3))
+        # Build EA perturations skeleton
+        _del_ = np.random.random((len(sgid[s]), 3))
+        # Find maximum perturbation distance
+        _delmax_ = glb_pert_max_ea1 - glb_pert_min_ea1
+        # Build EA perturations
+        _del_ = glb_pert_min_ea1 + _del_*_delmax_
+        # Instroduce perturbation
+        eas[s] += _pm_*_del_
 
 
         STEP 3 ---->
@@ -308,6 +343,7 @@ Phase	X	Y	Bands	Error	Euler1	Euler2	Euler3	MAD	BC	BS"""
                         euler2[loc[0], loc[1]] = ea[1]
                         euler3[loc[0], loc[1]] = ea[2]
 
+        plt.imshow(euler1)
         plt.imshow(euler3, cmap = 'gist_ncar')
         plt.imshow(euler3, cmap = 'nipy_spectral')
         plt.imshow((euler1+euler2+euler3)/3, cmap = 'nipy_spectral')
@@ -457,7 +493,7 @@ _ea_ += _pm_*_del_
         print('CTF coordinate-field data assembly successfull.')
         return ctf_numerical_data
 
-    def write_ctf_file(self, fileName):
+    def write_ctf_file(self, folder, fileName):
         nc, nr = self.hgrid.shape
         # data_lines = [self.header.format(nc, nr)]
         data_lines = [self.H.format(nc, nr)]
@@ -478,7 +514,8 @@ _ea_ += _pm_*_del_
                 data_lines.append(data_line)
         # Join all data
         ctf_data = "\n".join(data_lines)
-        filePathBase = Path(r"C:\Development\M2MatMod\upxo_packaged\upxo_private\src\upxo\_written_data\_ctf_export_2dmcgs")
+        filePathBase = Path(folder)
+        # filePathBase = Path(r"C:\Development\M2MatMod\upxo_packaged\upxo_private\src\upxo\_written_data\_ctf_export_2dmcgs")
         file_path = filePathBase / f"{fileName}.ctf"
 
         # Writing the data to a .ctf file

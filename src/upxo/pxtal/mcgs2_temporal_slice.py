@@ -3,11 +3,13 @@ import math
 import numpy as np
 import cv2
 import seaborn as sns
+from pathlib import Path
 from copy import deepcopy
 from typing import Iterable
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 from skimage.measure import regionprops
+from scipy.ndimage import generic_filter
 from scipy.interpolate import RegularGridInterpolator
 # from skimage.measure import label as skim_label
 # from upxo.geoEntities.point2d import point2d
@@ -17,6 +19,7 @@ from upxo.geoEntities.mulpoint2d import mulpoint2d
 from upxo.xtal.mcgrain2d_definitions import grain2d
 from upxo._sup.gops import att
 from upxo._sup import dataTypeHandlers as dth
+from upxo._sup.validation_values import _validation
 from upxo._sup.data_templates import pd_templates
 from upxo._sup.data_templates import dict_templates
 from upxo._sup.console_formats import print_incrementally
@@ -118,7 +121,8 @@ class mcgs2_grain_structure():
                  '__gi__', '__ui', 'display_messages', 'info',
                  'print_interval_bool', 'EAPGLB', 'EASGLB',
                  '__ori_assign_status_stack__', '__ori_assign_status_slice__',
-                 'scaled', 'scaled_gs', '__resolution_state__',
+                 'scaled', 'scaled_gs', '__resolution_state__', 'gbjp',
+                 'xomap', 'val',
                  )
     EPS = 1e-12
     __maxGridSizeToIgnoreStoringGrids = 250**2
@@ -128,6 +132,7 @@ class mcgs2_grain_structure():
                  EAPGLB=None, assign_ori_stack=False, assign_ori_slice=True,
                  oripert_tc=True, oripert_gr=True):
         self.__ui = uidata
+        self.val = _validation()
         self.dim, self.m, self.S, self.px_size = 2, m, S_total, px_size
         self.uigrid, self.uimesh = uigrid, uimesh
         self.xgr, self.ygr = xgr, ygr
@@ -147,6 +152,7 @@ class mcgs2_grain_structure():
         self.scaled_gs = None
         self.are_properties_available, self.display_messages = False, False
         self.__setup__positions__()
+        self.xomap = None
         if assign_ori_stack:
             self.__ori_assign_status_stack__ = {'status': False,
                                                 'info': 'to be developed'}
@@ -469,6 +475,7 @@ class mcgs2_grain_structure():
                     self.g[gn]['grain'].gid = gn
                     locations = np.argwhere(L == 1)
                     self.g[gn]['grain'].loc = locations
+                    self.g[gn]['grain'].npixels = locations.size
                     _ = locations.T
                     self.g[gn]['grain'].xmin = _[0].min()
                     self.g[gn]['grain'].xmax = _[0].max()
@@ -476,7 +483,7 @@ class mcgs2_grain_structure():
                     self.g[gn]['grain'].ymax = _[1].max()
                     self.g[gn]['grain'].s = state
                     self.g[gn]['grain'].sn = sn
-                    self.g[gn]['grain'].px_area = self.px_size
+                    self.g[gn]['grain']._px_area = self.px_size
                     sn += 1
                     # ---------------------------------------------
                     # Extract grain boundary indices
@@ -529,6 +536,150 @@ class mcgs2_grain_structure():
         self.build_prop()
         self.are_properties_available = True
         self.char_grain_positions_2d()
+
+    def find_grain_boundary_junction_points(self, xorimap=False):
+
+        def __find_junctions(pixel_values):
+            """
+            Function to be applied on each pixel. It checks if the central
+            pixel is a junction point. pixel_values: A flattened array of the
+            central pixel and its neighbors. Returns 1 if the central pixel
+            is a junction, else 0.
+            """
+            unique_grains = np.unique(pixel_values)
+            '''Count the unique grain IDs excluding the background or border
+            if needed'''
+            count = np.sum(unique_grains > 0)
+            return 1 if count >= 3 else 0
+        __footprint__ = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
+        # Apply the filter to identify junctions
+        if not xorimap:
+            self.gbjp = generic_filter(self.lgi, __find_junctions,
+                                       footprint=__footprint__, mode='nearest',
+                                       cval=0)
+        else:
+            self.xomap.gbjp = generic_filter(self.xomap.map.grains,
+                                             __find_junctions,
+                                             footprint=__footprint__,
+                                             mode='nearest',
+                                             cval=0)
+
+    def val_single_pixel_grains_exist(self):
+        # MAKE THIS A DECORATOR
+        pass
+
+    def val_straightline_grains_exist(self):
+        # MAKE THIS A DECORATOR
+        pass
+
+    def val_vertical_grains_exist(self):
+        # MAKE THIS A DECORATOR
+        pass
+
+    def remove_single_pixel_grains(self, acceptable_percentage_fraction=0):
+        if acceptable_percentage_fraction > 0.1:
+            # VALIDATE IF AT ALL THERE ARE SINGLE PIXEL GRAINS
+            acceptable_fraction = acceptable_percentage_fraction/100
+            # Calculate fraction to remove in the first iteration:
+            # MAY-BE CHOOSE 5% TO START
+            frac_iter = [0.05]
+            fraction_remaining = 1.00
+            count = 0
+            while fraction_remaining > acceptable_fraction:
+                # REMOVE THE SINGLE PIXEL GRAINS
+                fraction_to_remove = frac_iter[count]
+        else:
+            # JUST REMOVE ALL SINGLE PIXEL GRAINS
+            pass
+
+    def remove_straight_line_grains(self,
+                                    acceptable_percentage_fraction=0):
+        '''
+        By default, removes onlyu those straight lines of unit pixel width
+        '''
+        if acceptable_percentage_fraction > 0.1:
+            # VALIDATE IF AT ALL THERE ARE SINGLE PIXEL GRAINS
+            acceptable_fraction = acceptable_percentage_fraction/100
+            # Calculate fraction to remove in the first iteration:
+            # MAY-BE CHOOSE 5% TO START
+            frac_iter = [0.05]
+            fraction_remaining = 1.00
+            count = 0
+            while fraction_remaining > acceptable_fraction:
+                # REMOVE THE SINGLE PIXEL GRAINS
+                fraction_to_remove = frac_iter[count]
+        else:
+            # JUST REMOVE ALL SINGLE PIXEL GRAINS
+            pass
+
+    def xomap_set(self,
+                  map_type='ebsd',
+                  path=None,
+                  file_name_with_ext=None):
+        """
+        Crystal Orientation Map. EBSD dataswt is one which can be loadsed
+        EXAMPLE CALL
+        ------------
+        fileName = r'D:\export_folder\sunil'
+        pxt.gs[8].xomap = ebsd(fileName)
+        pxt.gs[tslice].xomap_set(map_type='ebsd',
+                                 path=r"D:/export_folder/",
+                                 file_name_with_ext=r"sunil.ctf")
+        """
+        # ---------------------------------------
+        # VALIDATE USER INPUTS
+        self.val.val_filename_has_ext(file_name_with_ext)
+        self.val.val_file_exists(path, file_name_with_ext)
+        # ---------------------------------------
+        from upxo.interfaces.defdap.importebsd import ebsd_data
+        # ---------------------------------------
+        self.xomap = ebsd_data(Path(path)/file_name_with_ext)
+
+    def xomap_prepare(self,
+                      kuwahara=False,
+                      filter_misori=5):
+        if kuwahara:
+            # Implement the Kuwahara filter, from DefDap native
+            self.xomap.map.filterData(misOriTol=filter_misori)
+        self.xomap.map.buildQuatArray()
+
+    def xomap_extract_features(self,
+                               gb_misori=10,
+                               min_grain_size=1):
+        self.xomap.map.findBoundaries(boundDef=gb_misori)
+        self.xomap.map.findGrains(minGrainSize=min_grain_size)
+        self.xomap.map.buildNeighbourNetwork()
+
+    def xomap_plot_grains(self):
+        self.xomap.map.plotGrainMap()
+
+    def xomap_plot_gb(self):
+        self.xomap.map.plotBoundaryMap()
+
+    def xomap_plot_phase(self):
+        self.xomap.map.plotPhaseMap()
+
+    def xomap_plot_bc(self):
+        self.xomap.map.plotBandContrastMap()
+
+    def xomap_plot_ea(self):
+        self.xomap.map.plotEulerMap()
+
+    def xomap_lgi(self):
+        '''
+        Returns the pixel - grain ID mapping
+        '''
+        # ---- > Equivalent to pxt.gs[8].lgi
+        return self.xomap.map.grains
+
+    def xomap_get_data(self):
+        self.xomap.map.quatArray
+        self.xomap.map.eulerAngleArray
+        # ACCESS GRAINS:
+        self.xomap.map.grainList[0].coordList
+
+    def xomap_pathc(self, xomap=None):
+        self.xomap = xomap
 
     def __make_linear_grid(self, sf=1):
         # Validate for maximum sf
@@ -2342,15 +2493,20 @@ class mcgs2_grain_structure():
     def export_vtk2d(self):
         pass
 
-    def export_ctf(self, filePath):
+    def export_ctf(self, folder, fileName):
+        '''
+        ctf.export_ctf('D:\export_folder', 'sunil')
+        '''
         from upxo._sup.export_data import ctf
         ctf = ctf()
         ctf.load_header_file()
         ctf.make_header_from_lines()
-        ctf.set_phase_name(phase_name='COPPER')
+        ctf.set_phase_name(phase_name='PHNAME')
         ctf.set_grid(self.xgr, self.ygr)
         ctf.set_state(self.S, self.s)
-        ctf.set_grid_data(field_data='rand')
+        ctf.set_grid_data()
+        ndata = ctf.assemble_grid_data()
+        ctf.write_ctf_file(folder, fileName)
 
 
     def export_slices(self,

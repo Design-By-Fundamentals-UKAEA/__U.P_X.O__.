@@ -1751,7 +1751,7 @@ class grid():
 # ---------------------------------------------------------------------
 
 
-class monte_carlo_grain_structure(grid):
+class mcgs(grid):
 
     def __init__(self,
                  study='independent',
