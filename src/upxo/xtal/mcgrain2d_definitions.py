@@ -242,8 +242,17 @@ class grain2d():
     def __len__(self):
         return len(self.loc)
 
-    def __lt__(self, _grain):
-        return self._grain
+    def __lt__(self, _g):
+        return self.npixels < self._g.npixels
+
+    def __le__(self, _grain):
+        return self.npixels <= self._g.npixels
+
+    def __gt__(self, _grain):
+        return self.npixels > self._g.npixels
+
+    def __ge__(self, _grain):
+        return self.npixels >= self._g.npixels
 
     def __mul__(self, k):
         self._px_area *= k
