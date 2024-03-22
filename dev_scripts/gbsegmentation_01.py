@@ -1,58 +1,65 @@
 import cv2
 import numpy as np
-import time
 import gmsh
 import pyvista as pv
 from copy import deepcopy
 import matplotlib.pyplot as plt
 from scipy.ndimage import generic_filter
 from meshpy.triangle import MeshInfo, build
-from scipy.interpolate import RegularGridInterpolator
-from upxo._sup.export_data import ctf
-from upxo.ggrowth.mcgs import monte_carlo_grain_structure as mcgs
+from upxo.ggrowth.mcgs import mcgs
 # =====================================================================
 pxt = mcgs()
 pxt.simulate()
 pxt.detect_grains()
-pxt.char_morph_2d(8)
-hgrid = pxt.gs[8].xgr
-vgrid = pxt.gs[8].ygr
-mcstates = pxt.gs[8].s
+tslice = 8  # Temporal slice number
+pxt.char_morph_2d(tslice)
+hgrid = pxt.gs[tslice].xgr
+vgrid = pxt.gs[tslice].ygr
+mcstates = pxt.gs[tslice].s
 nstates = pxt.uisim.S
-# =====================================================================
-pxt.gs[8].scale(sf=2)
-# =====================================================================
-# Find junction points:
-def find_junctions(pixel_values):
-    """
-    Function to be applied on each pixel. It checks if the central pixel is a junction.
-    pixel_values: A flattened array of the central pixel and its neighbors.
-    Returns 1 if the central pixel is a junction, else 0.
-    """
-    unique_grains = np.unique(pixel_values)
-    # Count the unique grain IDs excluding the background or border if needed
-    count = np.sum(unique_grains > 0)  # Adjust this condition based on your grain ID scheme
-    return 1 if count >= 3 else 0
-footprint = np.array([[1, 1, 1], [1, 1, 1], [1, 1, 1]])
-# Apply the filter to identify junctions
-junctions = generic_filter(pxt.gs[8].lgi, find_junctions, footprint=footprint, mode='nearest', cval=0)
+
+
+pxt.gs[8].g[1]['grain']
+
+
+# pxt.gs[tslice].scale(sf=2)
+pxt.gs[tslice].export_ctf(r'D:\export_folder', 'sunil')
+pxt.gs[tslice].find_grain_boundary_junction_points()
 # -----------------------------
-plt.imshow(pxt.gs[8].lgi)
-for r, c in zip(np.where(junctions)[0], np.where(junctions)[1]):
+#plt.figure()
+#plt.imshow(pxt.gs[tslice].lgi)
+#for r, c in zip(np.where(pxt.gs[tslice].gbjp)[0],
+#                np.where(pxt.gs[tslice].gbjp)[1]):
+#	plt.plot(c, r, 'k.')
+# =====================================================================
+pxt.gs[tslice].xomap_set(map_type='ebsd',
+                         path=r"D:/export_folder/",
+                         file_name_with_ext=r"sunil.ctf")
+
+pxt.gs[tslice].xomap_prepare()
+pxt.gs[tslice].xomap_extract_features()
+
+pxt.gs[tslice].find_grain_boundary_junction_points(xorimap=True)
+pxt.gs[tslice].xomap.gbjp
+
+
+pxt.gs[tslice].xomap.map.grains
+pxt.gs[tslice].xomap.map.eulerAngleArray
+pxt.gs[tslice].xomap.map.quatArray
+pxt.gs[tslice].xomap.map.grainList[0].coordList
+# Above is equivalent to:
+# COde here
+plt.figure()
+plt.imshow(pxt.gs[tslice].xomap.map.grains)
+for r, c in zip(np.where(pxt.gs[tslice].xomap.gbjp)[0],
+                np.where(pxt.gs[tslice].xomap.gbjp)[1]):
 	plt.plot(c, r, 'k.')
 # =====================================================================
-ctf = ctf()
-ctf.load_header_file()
-ctf.make_header_from_lines()
-ctf.set_phase_name(phase_name='PHNAME')
-ctf.set_grid(hgrid, vgrid)
-ctf.set_state(nstates, mcstates)
-ctf.set_grid_data()
-ndata = ctf.assemble_grid_data()
-ctf.write_ctf_file('sunil')
+#    INTEGRATION SUCCESSFULL TILL HERE:  "MCGS2_TEMPORAL_SLICE.PY"
 # =====================================================================
 from upxo.interfaces.defdap.importebsd import ebsd_data as ebsd
 fileName = r"C:\Development\M2MatMod\upxo_packaged\upxo_private\src\upxo\_written_data\_ctf_export_2dmcgs\sunil"
+fileName = r"D:\export_folder\sunil"
 # fileName = r"C:\Development\M2MatMod\mtex\EBSD_scan_data\map"
 gs = ebsd(fileName)
 # gs.map.filterData(misOriTol=5) # Kuwahara filter
@@ -74,15 +81,14 @@ gs.map.eulerAngleArray
 gs.map.grainList[0].coordList
 # =====================================================================
 # FIND JUNCTION POINTS:
-# a = deepcopy(gs.map.grains)
-junctions = generic_filter(gs.map.grains, find_junctions, footprint=footprint, mode='nearest', cval=0)
 
-gids = np.unique(gs.map.grains)
+gids = np.unique(pxt.gs[tslice].xomap.map.grains)
 BJP = {gid: None for gid in gids}  # Boundary Junction Points
 for gid in gids:
-	BJP[gid] = np.argwhere(junctions*(gs.map.grains==gid))
+	BJP[gid] = np.argwhere(pxt.gs[tslice].xomap.gbjp*(pxt.gs[tslice].xomap.map.grains==gid))
 
-plt.imshow(gs.map.grains)
+plt.figure()
+plt.imshow(pxt.gs[tslice].xomap.map.grains)
 for gid in gids:
 	bjpy, bjpx = BJP[gid].T
 	plt.plot(bjpx, bjpy, 'ro', mfc='none')

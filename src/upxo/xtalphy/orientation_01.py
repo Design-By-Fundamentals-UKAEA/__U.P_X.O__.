@@ -1,13 +1,16 @@
 import numpy as np
+
+
 class ori():
-    __slots__ = ('ea','q','aa')
+
+    __slots__ = ('ea', 'q', 'aa')
+
     def __init__(self):
         self.ea = None
-        self.q  = None
+        self.q = None
         self.aa = None
 
-    def
-    def q_from_ea(cls, ph1: float, phi: float, ph2: float) -> 'Quat':
+    def q_from_ea(self, ph1: float, phi: float, ph2: float):
         """
         CREDIT: from quat package from DefDAP
         NOTE: Below information reprodiced verbatim from quat
@@ -33,8 +36,8 @@ class ori():
             -np.cos(phi / 2.0) * np.sin((ph1 + ph2) / 2.0)
         ], dtype=float)
         return quatCoef
-    #-----------------------------------------------
-    def fromAxisAngle(cls, axis: np.ndarray, angle: float) -> 'Quat':
+
+    def fromAxisAngle(cls, axis: np.ndarray, angle: float):
         """
         CREDIT: from quat package from DefDAP
         NOTE: Below information reprodiced verbatim from quat
