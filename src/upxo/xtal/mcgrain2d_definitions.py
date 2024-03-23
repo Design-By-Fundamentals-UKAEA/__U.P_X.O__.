@@ -273,33 +273,48 @@ class grain2d():
     @val.DEC_validate_samples
     def __lt__(self, samples=None, types=None):
         '''
-        Allowed input datatypes:
-            A number
-            A UPXO grain2D object
+        Allowed input datatypes: number, A UPXO grain2D object
             pxt.gs[tslice].xomap.map.grainList[0].__class__.__name__
         '''
-        # VAL: See if sampls are numbers
+        # VAL: See if samples are numbers
         if list(types)[0] in dth.dt.NUMBERS:
-            cmp = [self.npixels == _ for _ in samples]
+            cmp = [self.npixels < _ for _ in samples]
         elif samples[0].__class__.__name__ == 'grain2d':  # Testing 1 is enough
             '''UPXO grain object'''
-            cmp = [self.npixels == _.npixels for _ in samples]
+            cmp = [self.npixels < _.npixels for _ in samples]
         elif samples[0].__class__.__name__ == 'Grain':  # Testing 1 is enough
             '''DefDap grain object'''
-            cmp = [self.npixels == len(_.coordList) for _ in samples]
+            cmp = [self.npixels < len(_.coordList) for _ in samples]
         return cmp
 
-    def __le__(self, _grain):
-        # INCLUDE VALIDATIONS
-        return self.npixels <= self._g.npixels
+    @val.DEC_validate_samples
+    def __gt__(self, samples=None, types=None):
+        '''
+        Allowed input datatypes: number, A UPXO grain2D object
+            pxt.gs[tslice].xomap.map.grainList[0].__class__.__name__
+        '''
+        # VAL: See if samples are numbers
+        if list(types)[0] in dth.dt.NUMBERS:
+            cmp = [self.npixels > _ for _ in samples]
+        elif samples[0].__class__.__name__ == 'grain2d':  # Testing 1 is enough
+            '''UPXO grain object'''
+            cmp = [self.npixels > _.npixels for _ in samples]
+        elif samples[0].__class__.__name__ == 'Grain':  # Testing 1 is enough
+            '''DefDap grain object'''
+            cmp = [self.npixels > len(_.coordList) for _ in samples]
+        return cmp
 
-    def __gt__(self, _grain):
-        # INCLUDE VALIDATIONS
-        return self.npixels > self._g.npixels
 
-    def __ge__(self, _grain):
-        # INCLUDE VALIDATIONS
-        return self.npixels >= self._g.npixels
+    def __le__(self, samples=None, types=None):
+        return [lt or eq for lt, eq in zip(self.__lt__(samples=samples),
+                                           self.__eq__(samples=samples))]
+
+    def __ge__(self, samples=None, types=None):
+        return [gt or eq for gt, eq in zip(self.__gt__(samples=samples),
+                                           self.__eq__(samples=samples))]
+
+    def __getitem__(self, key):
+        pass
 
     def __mul__(self, k):
         # INCLUDE VALIDATIONS
