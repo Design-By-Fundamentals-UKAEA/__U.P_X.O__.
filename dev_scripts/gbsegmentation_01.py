@@ -50,6 +50,10 @@ samples = [pxt.gs[8].g[i]['grain'] for i in pxt.gs[8].g.keys()]
 upxo_sample = samples[0]
 upxo_sample == samples
 upxo_sample != samples
+upxo_sample < samples
+upxo_sample <= samples
+upxo_sample > samples
+upxo_sample >= samples
 # TEST - 2: test against numbers
 upxo_sample == [16, 17, 8, 16, 2]
 upxo_sample != [16, 17, 8, 16, 2]
