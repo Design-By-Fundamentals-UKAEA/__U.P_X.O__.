@@ -82,7 +82,8 @@ class ctf():
     __slots__ = ('root', 'path', 'header', 'header_lines', 'data_format',
                  'val', 'phase_name', 'phase', 'hgrid', 'vgrid', 'nstates',
                  'mcstates', 'euler1', 'euler2', 'euler3', 'bands', 'error',
-                 'mad', 'bc', 'bs', 'ea1', 'ea2', 'ea3', 'data_format', 'H')
+                 'mad', 'bc', 'bs', 'ea1', 'ea2', 'ea3', 'data_format',
+                 'data_format_ORIX', 'H', 'H_ORIX')
 
     def __init__(self):
         self.root = os.getcwd()
@@ -93,6 +94,7 @@ class ctf():
         self.bands = self.error = self.mad = self.bc = self.bs = None
         self.val = _validation()
         self.data_format = "{phase}\t{x:.3f}\t{y:.3f}\t{bands}\t{error}\t{euler1:.5f}\t{euler2:.5f}\t{euler3:.5f}\t{mad:.5f}\t{bc}\t{bs}"
+        self.data_format_ORIX = "{phase}\t{x:.3f}\t{y:.3f}\t{bands}\t{euler1:.5f}\t{euler2:.5f}\t{euler3:.5f}\t{error}\t{mad:.5f}\t{bc}\t{bs}"
         self.H = """Channel Text File
 Prj\tUPXO_Synthetic_Grain_Structure
 Author\tDr. Sunil Anandatheertha
@@ -108,6 +110,21 @@ Euler angles refer to Sample Coordinate system (CS0)!	Mag	0.0000	Coverage	0	Devi
 Phases\t1
 3.614;3.614;3.614	90.000;90.000;90.000	Copper	11	0			Created from UPXO
 Phase	X	Y	Bands	Error	Euler1	Euler2	Euler3	MAD	BC	BS"""
+        self.H_ORIX = """Channel Text File
+Prj\tUPXO_Synthetic_Grain_Structure
+Author\tDr. Sunil Anandatheertha
+JobMode\tGrid
+XCells\t{}
+YCells\t{}
+XStep\t1.0
+YStep\t1.0
+AcqE1\t0
+AcqE2\t0
+AcqE3\t0
+Euler angles refer to Sample Coordinate system (CS0)!	Mag	0.0000	Coverage	0	Device	0	KV	0.0000	TiltAngle	0.0000	TiltAxis	0	DetectorOrientationE1	0.0000	DetectorOrientationE2	0.0000	DetectorOrientationE3	0.0000	WorkingDistance	0.0000	InsertionDistance	0.0000
+Phases\t1
+3.614;3.614;3.614	90.000;90.000;90.000	Copper	11	0			Created from UPXO
+Phase	X	Y	Bands	Euler1	Euler2	Euler3	Error	MAD	BC	BS"""
 
     def __repr__(self):
         return "UPXO.ctf"
@@ -331,8 +348,6 @@ for s in S:
 
 
         STEP 3 ---->
-
-
         for s in S:
             if sgid[s]:
                 for i, gid in enumerate(sgid[s], start=0):
@@ -508,6 +523,36 @@ _ea_ += _pm_*_del_
                                                     euler1=self.euler1[r][c],
                                                     euler2=self.euler2[r][c],
                                                     euler3=self.euler3[r][c],
+                                                    mad=self.mad[r][c],
+                                                    bc=self.bc[r][c],
+                                                    bs=self.bs[r][c])
+                data_lines.append(data_line)
+        # Join all data
+        ctf_data = "\n".join(data_lines)
+        filePathBase = Path(folder)
+        # filePathBase = Path(r"C:\Development\M2MatMod\upxo_packaged\upxo_private\src\upxo\_written_data\_ctf_export_2dmcgs")
+        file_path = filePathBase / f"{fileName}.ctf"
+
+        # Writing the data to a .ctf file
+        with open(file_path, 'w') as file:
+            file.write(ctf_data)
+            print(file_path)
+
+    def write_ctf_file_ORIX(self, folder, fileName):
+        nc, nr = self.hgrid.shape
+        # data_lines = [self.header.format(nc, nr)]
+        data_lines = [self.H_ORIX.format(nc, nr)]
+        for r in range(nr):
+            for c in range(nc):
+                # Preparing data line
+                data_line = self.data_format_ORIX.format(phase=self.phase[r][c],
+                                                    x=self.hgrid[r][c],
+                                                    y=self.vgrid[r][c],
+                                                    bands=self.bands[r][c],
+                                                    euler1=self.euler1[r][c],
+                                                    euler2=self.euler2[r][c],
+                                                    euler3=self.euler3[r][c],
+                                                    error=self.error[r][c],
                                                     mad=self.mad[r][c],
                                                     bc=self.bc[r][c],
                                                     bs=self.bs[r][c])

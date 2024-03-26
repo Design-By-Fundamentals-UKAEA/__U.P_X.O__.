@@ -16,7 +16,7 @@ import numpy as np
 import os
 from pathlib import Path
 from typing import Iterable
-from upxo._sup.dataTypeHandlers import dt
+from upxo._sup.dataTypeHandlers import dth
 
 
 class _validation():
@@ -168,9 +168,9 @@ class _validation():
     def valnums(self, numbers):
         if not isinstance(numbers, Iterable):
             numbers = (numbers,)
-        if not all([type(_) in dt.NUMBERS for _ in numbers]):
+        if not all([type(_) in dth.NUMBERS for _ in numbers]):
             raise TypeError(f'Invalid types in({numbers})'
-                            f'Expected: type in {dt.Numbers}')
+                            f'Expected: type in {dth.Numbers}')
 
     def val_data_exist(self, *args, **kwargs):
         if args:
@@ -263,6 +263,22 @@ class _validation():
         # Validate nuimber of elemenrs
         if len(set([arg.size for arg in args])) > 1:
             raise ValueError('The np arrays have unequal sizes')
+
+    def DEC_validate_samples(comparison_func):
+        '''
+        Decorator to validate if all elements in an dth.dt.ITERABLE type
+        object are of thye same type
+        '''
+
+        def wrapper(self, samples=None, *args, **kwargs):
+            samples = dth.inlist(samples)
+            _ = set(type(_) for _ in samples)
+            if len(_) != 1:
+                raise TypeError('All samples must be of the same type.')
+
+            return comparison_func(self, samples, _, *args, **kwargs)
+
+        return wrapper
 
     def contains_nparray(self,
                          ttype: str = 'gbjp_kernels2d',

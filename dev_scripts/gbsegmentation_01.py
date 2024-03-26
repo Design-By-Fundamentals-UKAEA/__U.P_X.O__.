@@ -42,6 +42,27 @@ pxt.gs[tslice].xomap_extract_features()
 pxt.gs[tslice].find_grain_boundary_junction_points(xorimap=True)
 pxt.gs[tslice].xomap.gbjp
 
+# ---------------------------------
+# TEST SCRIPTS TO TEST EQAUALITY OF GRAIN ARTEAS
+# TEST - 1: test against upxo grains
+samples = [pxt.gs[8].g[i]['grain'] for i in pxt.gs[8].g.keys()]
+[_.npixels for _ in samples]
+upxo_sample = samples[0]
+upxo_sample == samples
+upxo_sample != samples
+upxo_sample < samples
+upxo_sample <= samples
+upxo_sample > samples
+upxo_sample >= samples
+# TEST - 2: test against numbers
+upxo_sample == [16, 17, 8, 16, 2]
+upxo_sample != [16, 17, 8, 16, 2]
+# TEST - 3: test against defDap grains
+samples = pxt.gs[tslice].xomap.map.grainList
+[len(_.coordList) for _ in samples]
+upxo_sample == samples
+upxo_sample != samples
+# ---------------------------------
 
 pxt.gs[tslice].xomap.map.grains
 pxt.gs[tslice].xomap.map.eulerAngleArray

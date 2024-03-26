@@ -684,6 +684,7 @@ def ALL_UP2D(obj):
 def DEEPCHECK_is_coord2d_list(obj):
     """
     obj = [[1, 2], [3, 4]]
+    obj = [[1, 2]]
     dth.DEEPCHECK_is_coord2d_list(obj)
     """
     coord_list_truth_value = False
@@ -696,6 +697,12 @@ def DEEPCHECK_is_coord2d_list(obj):
 
 
 def DEEPCHECK_is_xy2d_list(obj):
+    """
+    obj = [[1, 2, 3, 4, 5], [1, 2, 32, 43, 54]]
+    obj = [[1, 2]]
+    obj = [1, 2]
+    dth.DEEPCHECK_is_xy2d_list(obj)
+    """
     xy_list_truth_value = False
     if dth.IS_ITER(obj) and len(obj) == 2 and dth.ALL_ITER(obj):
         if len(obj[0])==len(obj[1]):
@@ -851,6 +858,12 @@ def ShapelyPointList_to_coords(list_of_points, target_type='np@ckdtree'):
         pass
 
     return coordinates
+
+
+def inlist(data):
+    if type(data) not in dth.dt.ITERABLES:
+        data = [data]
+    return data
 
 
 def UpxoPointList_to_ckdtree(list_of_points):
