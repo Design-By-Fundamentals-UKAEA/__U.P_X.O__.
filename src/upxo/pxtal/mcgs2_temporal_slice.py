@@ -2,6 +2,7 @@ import os
 import math
 import numpy as np
 import cv2
+import random
 import seaborn as sns
 from pathlib import Path
 from copy import deepcopy
@@ -15,15 +16,18 @@ from scipy.interpolate import RegularGridInterpolator
 # from upxo.geoEntities.point2d import point2d
 # from scipy.ndimage import label, generate_binary_structure
 from upxo.meshing.mesher_2d import mesh_mcgs2d
-from upxo.geoEntities.mulpoint2d import mulpoint2d
+from upxo.dclasses.features import twingen
+# from upxo.geoEntities.mulpoint2d import mulpoint2d
 from upxo.xtal.mcgrain2d_definitions import grain2d
 from upxo._sup.gops import att
+from upxo._sup.data_ops import find_intersection, find_union_with_counts
+from upxo._sup.data_ops import increase_grid_resolution, decrease_grid_resolution
 from upxo._sup import dataTypeHandlers as dth
 from upxo._sup.validation_values import _validation
 from upxo._sup.data_templates import pd_templates
 from upxo._sup.data_templates import dict_templates
 from upxo._sup.console_formats import print_incrementally
-
+from upxo.geoEntities.sline2d import Sline2d as sl2d
 
 class mcgs2_grain_structure():
     """
@@ -60,7 +64,7 @@ class mcgs2_grain_structure():
     are_properties_available: True if properties have been caculated
     prop_stat: PANDAS TABLE of property statistics
     __gi__: Grain index used for __iter__
-    __ui: Stores original user inp used by grid() instance
+    uinputs: Stores original user inp used by grid() instance
     display_messages',
     info',
     print_interval_bool',
@@ -118,12 +122,14 @@ class mcgs2_grain_structure():
                  'spart_flag', 'gid', 's_gid', 'gid_s', 's_n', 'g', 'gb',
                  'positions', 'mp', 'vtgs', 'mesh', 'px_size', 'dim',
                  'prop_flag', 'prop', 'are_properties_available', 'prop_stat',
-                 '__gi__', '__ui', 'display_messages', 'info',
+                 '__gi__', 'uinputs', 'display_messages', 'info',
                  'print_interval_bool', 'EAPGLB', 'EASGLB',
                  '__ori_assign_status_stack__', '__ori_assign_status_slice__',
                  'scaled', 'scaled_gs', '__resolution_state__', 'gbjp',
-                 'xomap', 'val',
+                 'xomap', 'val', 'neigh_gid', 'valid_mprops', 'features',
+                 'twingen', 'pxtal', '_gid_bf_merger_'
                  )
+
     EPS = 1e-12
     __maxGridSizeToIgnoreStoringGrids = 250**2
 
@@ -131,7 +137,7 @@ class mcgs2_grain_structure():
                  xgr=None, ygr=None, zgr=None, uigrid=None, uimesh=None,
                  EAPGLB=None, assign_ori_stack=False, assign_ori_slice=True,
                  oripert_tc=True, oripert_gr=True):
-        self.__ui = uidata
+        self.uinputs = uidata
         self.val = _validation()
         self.dim, self.m, self.S, self.px_size = 2, m, S_total, px_size
         self.uigrid, self.uimesh = uigrid, uimesh
@@ -153,6 +159,8 @@ class mcgs2_grain_structure():
         self.are_properties_available, self.display_messages = False, False
         self.__setup__positions__()
         self.xomap = None
+        self.neigh_gid = None
+
         if assign_ori_stack:
             self.__ori_assign_status_stack__ = {'status': False,
                                                 'info': 'to be developed'}
@@ -207,6 +215,25 @@ class mcgs2_grain_structure():
                            }
             oripert_gr
             '''
+        self.valid_mprops = {'npixels': False,
+                             'npixels_gb': False,
+                             'area': True,
+                             'eq_diameter': False,
+                             'perimeter': False,
+                             'perimeter_crofton': False,
+                             'compactness': False,
+                             'gb_length_px': False,
+                             'aspect_ratio': False,
+                             'solidity': False,
+                             'morph_ori': False,
+                             'circularity': False,
+                             'eccentricity': False,
+                             'feret_diameter': False,
+                             'major_axis_length': False,
+                             'minor_axis_length': False,
+                             'euler_number': False,
+                             'char_grain_positions': False}
+        self.pxtal = {}
 
     def __iter__(self):
         self.__gi__ = 1
@@ -238,6 +265,7 @@ class mcgs2_grain_structure():
 
     @property
     def get_px_size(self):
+        '''Get size of the pixel.'''
         return self.px_size
 
     def set__s_n(self,
@@ -259,17 +287,30 @@ class mcgs2_grain_structure():
 
         self.s_n = [0 for s in range(1, S_total+1)]
 
-    def set__s_gid(self, S_total,):
+    def set__s_gid(self, S_total):
+        """
+        Set up dict of s as keys with None values.
+
+        Parameters
+        ----------
+        S_total : int
+            Specify the total number of states.
+
+        Returns
+        -------
+        None
+        """
         self.s_gid = {s: None for s in range(1, S_total+1)}
 
     def set__gid_s(self):
+        '''Set up empty list. This would contain list of s values for every gid.'''
         self.gid_s = []
 
-    def set__spart_flag(self, S_total,):
+    def set__spart_flag(self, S_total):
         self.spart_flag = {_s_: False for _s_ in range(1, S_total+1)}
 
     def _check_lgi_dtype_uint8(self, lgi):
-        """ Validates and modifies (if needed) lgi user input data-type """
+        """Validates and modifies (if needed) lgi user input data-type."""
         if type(lgi) == np.ndarray and np.size(lgi) > 0 and np.ndim(lgi) == 2:
             if self.lgi.dtype.name != 'uint8':
                 self.lgi = lgi.astype(np.uint8)
@@ -279,20 +320,21 @@ class mcgs2_grain_structure():
             self.lgi = 'invalid mcgs 4685'
 
     def calc_num_grains(self, throw=False):
-        """ Calculate the total number of grains in this grain structure """
+        """Calculate the total number of grains in this grain structure."""
         if self.lgi:
             self.n = self.lgi.max()
             if throw:
                 return self.n
 
-    @print_incrementally
-    def neigh(self):
+    def find_neigh(self):
+        '''Find the gids of neighbours for every gid.'''
         for idx, _gid_ in enumerate(self.gid):
-            if self.print_interval_bool[idx]:
+            if (idx+1) % 100 == 0:
                 print(f'Extracting neigh list for grain: {_gid_}')
-            self.neigh_gid(_gid_)
+            self.find_neigh_gid(_gid_)
 
-    def neigh_gid(self, gid, throw=False):
+    def find_neigh_gid(self, gid, throw=False):
+        # Find the gids of neighbours of a given gid.
         bounds = self.g[gid]['grain'].bbox_ex_bounds
         probable_grains_locs = self.lgi[bounds[0]:bounds[1]+1,
                                         bounds[2]:bounds[3]+1]
@@ -329,6 +371,9 @@ class mcgs2_grain_structure():
         neighbour_ids = np.unique(neigh_pixel_grain_ids)
         """ Store the neighbnour_ids inside the grain object """
         self.g[gid]['grain'].neigh = tuple(neighbour_ids)
+        """ Store the neighbnour_ids inside this GS instance """
+        self.neigh_gid = {_gid_: self.g[_gid_]['grain'].neigh
+                          for _gid_ in self.gid}
         """ Mark the locations of grain boundaries which woulsd be individual
         segments. Each segnment marks the grain boundary interface of the
         'gid' grain with its neighbouring grains. """
@@ -340,14 +385,341 @@ class mcgs2_grain_structure():
         object's data structure """
         self.g[gid]['grain'].gbsegs_pre = gbsegs_pre
 
-    def char_morph_2d(self, brec=True, brec_ex=True, npixels=True,
-                      npixels_gb=True, area=True, eq_diameter=True,
-                      perimeter=True, perimeter_crofton=True,
-                      compactness=True, gb_length_px=True, aspect_ratio=True,
-                      solidity=True, morph_ori=True, circularity=True,
-                      eccentricity=True, feret_diameter=True,
-                      major_axis_length=True, minor_axis_length=True,
-                      euler_number=True, append=False, saa=True, throw=False):
+    def find_extended_bounding_box(self, gid):
+        """
+        Find the extended bounded box of a given gid.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        pxtal.gs[16].find_extended_bounding_box(10)
+        """
+        loc = np.where(self.lgi == gid)
+        xi, xj, yi, yj = loc[0].min(), loc[0].max(), loc[1].min(), loc[1].max()
+        xmax, ymax = self.lgi.shape
+        if xi == 0 and xi == xmax:
+            if yi == 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi:xj, yi:yj]
+            elif yi == 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi:xj, yi:yj+2]
+            elif yi > 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi:xj, yi-2:yj]
+            elif yi > 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi:xj, yi-2:yj+2]
+        elif xi == 0 and xi < xmax:
+            if yi == 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi:xj+2, yi:yj]
+            elif yi == 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi:xj+2, yi:yj+2]
+            elif yi > 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi:xj+2, yi-1:yj]
+            elif yi > 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi:xj+2, yi-1:yj+2]
+        elif xi > 0 and xi == xmax:
+            if yi == 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj, yi:yj]
+            elif yi == 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj, yi:yj+2]
+            elif yi > 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj, yi-1:yj]
+            elif yi > 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj, yi-1:yj+2]
+        elif xi > 0 and xi < xmax:
+            if yi == 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj+2, yi:yj]
+            elif yi == 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj+2, yi:yj+2]
+            elif yi > 0 and yi == ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj+2, yi-1:yj]
+            elif yi > 0 and yi < ymax:
+                grain_lgi_ex = self.lgi[xi-1:xj+2, yi-1:yj+2]
+        return grain_lgi_ex
+
+    def find_extended_bounding_box_all_grains(self):
+        """
+        Find the extended bounded box of every gid.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        pxtal.gs[16].find_extended_bounding_box_all_grains()
+        """
+        grain_lgi_ex_all = {gid: None for gid in self.gid}
+        for gid in self.gid:
+            grain_lgi_ex_all[gid] = self.find_extended_bounding_box(gid)
+        return grain_lgi_ex_all
+
+    def find_neigh_gid_fast(self, gid, include_parent=False):
+        """
+        Find neighbouring grains of a given gid.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        np.unique(pxtal.gs[16].find_extended_bounding_box(10))
+        pxtal.gs[16].find_neigh_gid_fast(10)
+        """
+        neighbours = list(np.unique(self.find_extended_bounding_box(gid)))
+        if not include_parent:
+            neighbours.remove(gid)
+        return tuple(neighbours)
+
+    def find_neigh_gid_fast_all_grains(self, include_parent=False,
+                                       saa=True, throw=False):
+        """
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        np.unique(pxtal.gs[16].find_extended_bounding_box(10))
+        pxtal.gs[16].find_neigh_gid_fast_all_grains(include_parent=False)
+        pxtal.gs[16].neigh_gid
+        """
+        neigh_gid = {gid: self.find_neigh_gid_fast(gid, include_parent=include_parent)
+                     for gid in self.gid}
+        if saa:
+            self.neigh_gid = neigh_gid
+        if throw:
+            return neigh_gid
+
+    def get_upto_nth_order_neighbors(self, grain_id, neigh_order,
+                                     recalculate=False, include_parent=True,
+                                     output_type='list'):
+        """
+        Calculates the nth order neighbours for a given gid.
+
+        Args:
+            cell_id: The ID of the cell for which to find neighbors.
+            n: The order of neighbors to calculate (1st order, 2nd order, etc.).
+
+        Returns:
+            A set containing the nth order neighbours.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        gid = 10
+        np.unique(pxtal.gs[16].find_extended_bounding_box(gid))
+        pxtal.gs[16].find_neigh_gid_fast_all_grains(include_parent=False)
+        neigh_order = 3
+        pxtal.gs[16].get_upto_nth_order_neighbors(gid,
+                                                  neigh_order,
+                                                  recalculate=False,
+                                                  include_parent=True,
+                                                  output_type='list')
+        """
+        if neigh_order == 0:
+            return grain_id
+        if recalculate or not self.neigh_gid:
+            self.find_neigh_gid_fast_all_grains(include_parent=False)
+        # Start with 1st-order neighbors
+        neighbors = set(self.neigh_gid.get(grain_id, []))
+
+        for _ in range(neigh_order - 1):
+            new_neighbors = set()
+            for neighbor in neighbors:
+                new_neighbors.update(self.neigh_gid.get(neighbor, []))
+            neighbors.update(new_neighbors)
+
+        if not include_parent:
+            neighbors.discard(grain_id)
+        if output_type == 'list':
+            return list(neighbors)
+        if output_type == 'nparray':
+            return np.array(list(neighbors))
+        elif output_type == 'set':
+            return neighbors
+
+    def get_nth_order_neighbors(self, grain_id, neigh_order,
+                                recalculate=False, include_parent=True):
+        """
+        Calculates the 1st till nth order neighbours for a given gid.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        gid = 10
+        np.unique(pxtal.gs[16].find_extended_bounding_box(gid))
+        pxtal.gs[16].find_neigh_gid_fast_all_grains(include_parent=False)
+        neigh_order = 2
+        pxtal.gs[16].get_nth_order_neighbors(gid,
+                                             neigh_order,
+                                             recalculate=False,
+                                             include_parent=True)
+        """
+        neigh_upto_n_minus_1 = self.get_upto_nth_order_neighbors(grain_id,
+                                                                 neigh_order-1,
+                                                                 include_parent=include_parent,
+                                                                 output_type='set')
+        if type(neigh_upto_n_minus_1) in dth.dt.NUMBERS:
+            neigh_upto_n_minus_1 = set([neigh_upto_n_minus_1])
+
+        neigh_upto_n = self.get_upto_nth_order_neighbors(grain_id, neigh_order,
+                                                         include_parent=include_parent,
+                                                         output_type='set')
+        if type(neigh_upto_n) in dth.dt.NUMBERS:
+            neigh_upto_n = set([neigh_upto_n])
+        return list(neigh_upto_n.difference(neigh_upto_n_minus_1))
+
+    def get_upto_nth_order_neighbors_all_grains(self, neigh_order,
+                                                recalculate=False,
+                                                include_parent=True,
+                                                output_type='list'):
+        """
+        Calculates 1st to nth order neighbors of all gids.
+
+        Args:
+            cell_id: The ID of the cell for which to find neighbors.
+            n: The order of neighbors to calculate (1st order, 2nd order, etc.).
+
+        Returns:
+            A set containing the nth order neighbors.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        neigh_order = 3
+        pxtal.gs[16].get_upto_nth_order_neighbors_all_grains(neigh_order,
+                                                             recalculate=False,
+                                                             include_parent=True,
+                                                             output_type='list')
+        """
+        neighs_upto_nth_order = {gid: self.get_upto_nth_order_neighbors(gid,
+                                                                        neigh_order,
+                                                                        recalculate=recalculate,
+                                                                        include_parent=include_parent,
+                                                                        output_type='list')
+                                 for gid in self.gid}
+        return neighs_upto_nth_order
+
+    def get_nth_order_neighbors_all_grains(self, neigh_order,
+                                           recalculate=False,
+                                           include_parent=True):
+        """
+        Calculates the nth order neighbours of all gids.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',
+                     input_dashboard='input_dashboard_for_testing_50x50_alg202.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        neigh_order = 2
+        A = pxtal.gs[16].get_upto_nth_order_neighbors_all_grains(neigh_order,
+                                                             recalculate=False,
+                                                             include_parent=True,
+                                                             output_type='list')
+        B = pxtal.gs[16].get_nth_order_neighbors_all_grains(neigh_order,
+                                                        recalculate=False,
+                                                        include_parent=True)
+
+        """
+        neighs_nth_order = {gid: self.get_nth_order_neighbors(gid,
+                                                              neigh_order,
+                                                              recalculate=recalculate,
+                                                              include_parent=include_parent)
+                            for gid in self.gid}
+        return neighs_nth_order
+
+    def get_upto_nth_order_neighbors_all_grains_prob(self, neigh_order,
+                                                     recalculate=False,
+                                                     include_parent=False,
+                                                     print_msg=False):
+        """
+        from upxo.ggrowth.mcgs import mcgs
+        pxt = mcgs()
+        pxt.simulate()
+        pxt.detect_grains()
+        tslice = 10
+        def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+
+        neigh0 = def_neigh(1, recalculate=False, include_parent=True)
+        neigh1 = def_neigh(1.06, recalculate=False, include_parent=True)
+        neigh2 = def_neigh(1.5, recalculate=False, include_parent=True)
+        neigh0[22]
+        neigh1[2][22]
+        neigh2[2][22]
+        """
+        # @dev:
+            # no: neighbour order in these definitions.
+        no = neigh_order
+        on_neigh_all_grains_upto = self.get_upto_nth_order_neighbors_all_grains
+        on_neigh_all_grains_at = self.get_nth_order_neighbors_all_grains
+        if isinstance(no, (int, np.int32)):
+            if print_msg:
+                print('neigh_order is of type int. Adopting the usual method.')
+            neigh_on = on_neigh_all_grains_upto(no, recalculate=recalculate,
+                                           include_parent=include_parent)
+            return neigh_on
+        elif isinstance(no, (float, np.float64)):
+            if abs(no-round(no)) < 0.05:
+                if print_msg:
+                    print('neigh_order is close to being int. Adopting usual method.')
+                neigh_on = on_neigh_all_grains_upto(math.floor(no),
+                                                    recalculate=recalculate,
+                                                    include_parent=include_parent)
+                return neigh_on
+            else:
+                if print_msg:
+                    # Nothing to print
+                    pass
+                no_low, no_high = math.floor(no), math.ceil(no)
+                neigh_upto_low = on_neigh_all_grains_upto(no_low,
+                                                          recalculate=recalculate,
+                                                          include_parent=include_parent)
+                neigh_at_high = on_neigh_all_grains_at(no_low + 1,
+                                                       recalculate=recalculate,
+                                                       include_parent=False)
+                delno = np.round(abs(neigh_order-math.floor(neigh_order)), 4)
+                neighbours = {}
+                for gid in self.gid:
+                    nselect = math.ceil(delno * len(neigh_at_high[gid]))
+                    if len(neigh_at_high[gid]) > 1:
+                        neighbours[gid] = neigh_upto_low[gid] + random.sample(neigh_at_high[gid],
+                                                                              nselect)
+                return neighbours
+        else:
+            raise ValueError('Invalid neigh_order')
+
+    def char_morph_2d(self, bbox=True, bbox_ex=True, npixels=False,
+                      npixels_gb=False, area=False, eq_diameter=False,
+                      perimeter=False, perimeter_crofton=False,
+                      compactness=False, gb_length_px=False, aspect_ratio=False,
+                      solidity=False, morph_ori=False, circularity=False,
+                      eccentricity=False, feret_diameter=False,
+                      major_axis_length=False, minor_axis_length=False,
+                      euler_number=False, append=False, saa=True, throw=False,
+                      char_grain_positions=False, find_neigh=False,
+                      char_gb=False, make_skim_prop=False,
+                      get_grain_coords=True):
         """
         This method allows user to calculate morphological parameters
         of a given grain structure slice.
@@ -415,7 +787,6 @@ class mcgs2_grain_structure():
         append : bool
             DESCRIPTION
 
-
         Returns
         -------
         None.
@@ -431,8 +802,8 @@ class mcgs2_grain_structure():
         """
         # Make data holder for properties
         __ = pd_templates()
-        __a, __b, __c = __.make_prop2d_df(brec=brec,
-                                          brec_ex=brec_ex,
+        __a, __b, __c = __.make_prop2d_df(bbox=bbox,
+                                          bbox_ex=bbox_ex,
                                           npixels=npixels,
                                           npixels_gb=npixels_gb,
                                           area=area,
@@ -456,10 +827,10 @@ class mcgs2_grain_structure():
         # ---------------------------------------------
         Rlab, Clab = self.lgi.shape[0], self.lgi.shape[1]
         # ---------------------------------------------
-        print(40*'-',
-              '\nExtracting requested GS props across all available states')
+        print('Extracting requested GS props across all available states')
         for s in self.s_gid.keys():
-            print(f"     State value: {s}")
+            if s % 5 == 0:
+                print(f"--------State value: {s} of {self.S}")
             s_gid_keys_npy = [skey for skey in self.s_gid.keys()
                               if self.s_gid[skey]]
             # ---------------------------------------------
@@ -467,7 +838,10 @@ class mcgs2_grain_structure():
             for state in s_gid_keys_npy:
                 grains = self.s_gid[state]
                 # Iterate through each grain of this state value
-                for gn in grains:
+                _ngrains_ = len(grains)
+                for i, gn in enumerate(grains, start=1):
+                    if _ngrains_%100 == 0:
+                        print(f'....grain no. {i}/{_ngrains_}')
                     _, L = cv2.connectedComponents(np.array(self.lgi == gn,
                                                             dtype=np.uint8))
                     self.g[gn] = {'s': state,
@@ -487,57 +861,71 @@ class mcgs2_grain_structure():
                     sn += 1
                     # ---------------------------------------------
                     # Extract grain boundary indices
-                    mask = np.zeros_like(self.lgi)
-                    mask[self.lgi == gn] = 255
-                    mask = mask.astype(np.uint8)
-                    contours, _ = cv2.findContours(mask,
-                                                   cv2.RETR_EXTERNAL,
-                                                   cv2.CHAIN_APPROX_NONE)
-                    gb = np.squeeze(contours[0], axis=1)
-                    # Interchange the row and column to get into right
-                    # indexing order
-                    gb[:, [1, 0]] = gb[:, [0, 1]]
-                    self.g[gn]['grain'].gbloc = deepcopy(gb)
-                    # ---------------------------------------------
-                    # Extract bounding rectangle
-                    Rlab = L.shape[0]
-                    Clab = L.shape[1]
+                    if char_gb:
+                        mask = np.zeros_like(self.lgi)
+                        mask[self.lgi == gn] = 255
+                        mask = mask.astype(np.uint8)
+                        contours, _ = cv2.findContours(mask,
+                                                       cv2.RETR_EXTERNAL,
+                                                       cv2.CHAIN_APPROX_NONE)
+                        gb = np.squeeze(contours[0], axis=1)
+                        # Interchange the row and column to get into right
+                        # indexing order
+                        gb[:, [1, 0]] = gb[:, [0, 1]]
+                        self.g[gn]['grain'].gbloc = deepcopy(gb)
                     # ---------------------------------------------
                     rmin = np.where(L == 1)[0].min()
                     rmax = np.where(L == 1)[0].max()+1
                     cmin = np.where(L == 1)[1].min()
                     cmax = np.where(L == 1)[1].max()+1
                     # ---------------------------------------------
-                    rmin_ex = rmin - int(rmin != 0)
-                    rmax_ex = rmax + int(rmin != Rlab)
-                    cmin_ex = cmin - int(cmin != 0)
-                    cmax_ex = cmax + int(cmax != Clab)
-                    # Store the bounds of the bounding box
-                    self.g[gn]['grain'].bbox_bounds = [rmin, rmax,
-                                                       cmin, cmax]
-                    # Store the bounds of the extended bounding box
-                    self.g[gn]['grain'].bbox_ex_bounds = [rmin_ex, rmax_ex,
-                                                          cmin_ex, cmax_ex]
-                    # Store bounding box
-                    self.g[gn]['grain'].bbox = np.array(L[rmin:rmax,
-                                                          cmin:cmax],
-                                                        dtype=np.uint8)
-                    # Store the extended bounding box
-                    self.g[gn]['grain'].bbox_ex = np.array(L[rmin_ex:rmax_ex,
-                                                             cmin_ex:cmax_ex],
-                                                           dtype=np.uint8)
-                    # Store the scikit-image regionproperties generator
-                    self.g[gn]['grain'].make_prop(regionprops, skprop=True)
-                    __ = np.array([[self.xgr[ij[0], ij[1]],
-                                    self.ygr[ij[0], ij[1]]]
-                                   for ij in self.g[gn]['grain'].loc])
-                    self.g[gn]['grain'].coords = __
+                    if bbox_ex:
+                        # Extract bounding rectangle
+                        Rlab = L.shape[0]
+                        Clab = L.shape[1]
+
+                        rmin_ex = rmin - int(rmin != 0)
+                        rmax_ex = rmax + int(rmin != Rlab)
+                        cmin_ex = cmin - int(cmin != 0)
+                        cmax_ex = cmax + int(cmax != Clab)
+                    # ---------------------------------------------
+                    if bbox:
+                        # Store the bounds of the bounding box
+                        self.g[gn]['grain'].bbox_bounds = [rmin, rmax,
+                                                           cmin, cmax]
+                    if bbox:
+                        # Store bounding box
+                        self.g[gn]['grain'].bbox = np.array(L[rmin:rmax,
+                                                              cmin:cmax],
+                                                            dtype=np.uint8)
+                    if bbox_ex:
+                        # Store the bounds of the extended bounding box
+                        self.g[gn]['grain'].bbox_ex_bounds = [rmin_ex, rmax_ex,
+                                                              cmin_ex, cmax_ex]
+                    if bbox_ex:
+                        # Store the extended bounding box
+                        self.g[gn]['grain'].bbox_ex = np.array(L[rmin_ex:rmax_ex,
+                                                                 cmin_ex:cmax_ex],
+                                                               dtype=np.uint8)
+                    if make_skim_prop:
+                        # Store the scikit-image regionproperties generator
+                        self.g[gn]['grain'].make_prop(regionprops, skprop=True)
+                    if get_grain_coords:
+                        # Make coordinates
+                        _coords_ = np.array([[self.xgr[ij[0], ij[1]],
+                                              self.ygr[ij[0], ij[1]]]
+                                             for ij in self.g[gn]['grain'].loc])
+                        self.g[gn]['grain'].coords = deepcopy(_coords_)
         print(40*'-')
         self.build_prop()
         self.are_properties_available = True
-        self.char_grain_positions_2d()
+        if char_grain_positions:
+            self.char_grain_positions_2d()
+        if find_neigh:
+            print('Identifying grain neighbours.')
+            self.find_neigh()
 
-    def find_grain_boundary_junction_points(self, xorimap=False):
+    def find_grain_boundary_junction_points(self, xorimap=False, IN=None):
 
         def __find_junctions(pixel_values):
             """
@@ -558,23 +946,23 @@ class mcgs2_grain_structure():
                                        footprint=__footprint__, mode='nearest',
                                        cval=0)
         else:
-            self.xomap.gbjp = generic_filter(self.xomap.map.grains,
-                                             __find_junctions,
-                                             footprint=__footprint__,
-                                             mode='nearest',
-                                             cval=0)
+            if IN in self.pxtal.keys():
+                self.pxtal[IN].gbjp = generic_filter(self.pxtal[IN].lgi,
+                                                     __find_junctions,
+                                                     footprint=__footprint__,
+                                                     mode='nearest',
+                                                     cval=0)
+            else:
+                print(f'Invalid Instance number, IN: {IN}')
 
-    def val_single_pixel_grains_exist(self):
+    def do_single_pixel_grains_exist(self):
         # MAKE THIS A DECORATOR
         pass
 
-    def val_straightline_grains_exist(self):
+    def do_straightline_grains_exist(self):
         # MAKE THIS A DECORATOR
         pass
 
-    def val_vertical_grains_exist(self):
-        # MAKE THIS A DECORATOR
-        pass
 
     def remove_single_pixel_grains(self, acceptable_percentage_fraction=0):
         if acceptable_percentage_fraction > 0.1:
@@ -595,7 +983,7 @@ class mcgs2_grain_structure():
     def remove_straight_line_grains(self,
                                     acceptable_percentage_fraction=0):
         '''
-        By default, removes onlyu those straight lines of unit pixel width
+        By default, removes only those straight lines of unit pixel width.
         '''
         if acceptable_percentage_fraction > 0.1:
             # VALIDATE IF AT ALL THERE ARE SINGLE PIXEL GRAINS
@@ -612,74 +1000,816 @@ class mcgs2_grain_structure():
             # JUST REMOVE ALL SINGLE PIXEL GRAINS
             pass
 
-    def xomap_set(self,
+    def check_for_neigh(self, parent_gid, other_gid):
+        """
+        Check if other_gid is indeed a O(1) neighbour of parent_gid.
+
+        Parameters
+        ----------
+        parent_gid:
+            Grain ID of the parent.
+        other_gid:
+            Grain ID of the other grain being checked for O(1) neighbourhood
+            with parent_gid.
+
+        Returns
+        -------
+        True if other_gid is a valid O(1) neighbour of parent_gid, else False.
+        """
+        return True if other_gid in self.neigh_gid[parent_gid] else False
+
+    def get_two_rand_o1_neighs(self):
+        """
+        Calculate at random, two neighbouring O(1) grains.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+        mcgs.simulate()
+        mcgs.detect_grains()
+        mcgs.gs[35].char_morph_2d()
+        mcgs.gs[35].find_neigh()
+        mcgs.gs[35].neigh_gid
+        mcgs.gs[35].get_two_rand_o1_neighs()
+        mcgs.gs[35].plot_two_rand_neighs(return_gids=True)
+        """
+        if self.neigh_gid:
+            rand_gid = random.sample(self.gid, 1)[0]
+            rand_neigh_rand_grain = random.sample(self.neigh_gid[rand_gid],
+                                                  1)[0]
+            return [rand_gid, rand_neigh_rand_grain]
+        else:
+            print('Please build neigh_gid data before using this function.')
+            return [None, None]
+
+    def plot_two_rand_neighs(self, return_gids=True):
+        """
+        Plot two random neighbouring grains.
+
+        Parameters
+        ----------
+        return_gids: bool
+            Flag to return the random neigh gid numbers. Defaults to True.
+
+        Return
+        ------
+        rand_neigh_gids: list
+            random neigh gid numbers. Will be gids if return_gids is True.
+            Else, will be [None, None].
+
+        Example
+        -------
+        Please refer to use in the example provided for the definition,
+        get_two_rand_o1_neighs()
+        """
+        rand_neigh_gids = self.get_two_rand_o1_neighs()
+        self.plot_grains_gids(rand_neigh_gids, cmap_name='viridis')
+        if return_gids:
+            return rand_neigh_gids
+        else:
+            return [None, None]
+
+    def _merge_two_grains_(self, parent_gid, other_gid, print_msg=False):
+        """Low level merge operartion. No checks done. Just merging.
+
+        Parameters
+        ----------
+        parent_gid: int
+            Parent grain ID number.
+        other_gid: int
+            Otrher grain ID number.
+        print_msg: bool
+            Defgaults to False.
+
+        Returns
+        -------
+        None
+
+        Usage
+        -----
+        Internal use only.
+        """
+        self.lgi[self.lgi == other_gid] = parent_gid
+        if print_msg:
+            print(f"Grain {other_gid} merged with grain {parent_gid}.")
+
+    def merge_two_neigh_grains(self, parent_gid, other_gid,
+                               check_for_neigh=True, simple_merge=True):
+        """
+        Merge other_gid grain to the parent_gid grain.
+
+        Paramters
+        ---------
+        parent_gid:
+            Grain ID of the parent.
+        other_gid:
+            Grain ID of the other grain being merged into the parent.
+        check_for_neigh: bool.
+            If True, other_gid will be checked if it can be merged to the
+            parent grain. Defaults to True.
+
+        Returns
+        -------
+        merge_success: bool
+            True, if successfully merged, else False.
+        """
+        def MergeGrains():
+            if simple_merge:
+                self._merge_two_grains_(parent_gid, other_gid, print_msg=False)
+                merge_success = True
+            else:
+                print("Special merge process. To be developed.")
+                merge_success = False  # As of now, this willd efault to False.
+            return merge_success
+        # ---------------------------------------
+        if not check_for_neigh:
+            merge_success = MergeGrains()
+        else:
+            if check_for_neigh and not self.check_for_neigh(parent_gid, other_gid):
+                # print('Check for neigh failed. Nothing merged.')
+                merge_success = False
+            # ---------------------------------------
+            if any((check_for_neigh, self.check_for_neigh(parent_gid, other_gid))):
+                merge_success = MergeGrains()
+                # print(f"Grain {other_gid} merged with grain {parent_gid}.")
+        return merge_success
+
+    def perform_post_grain_merge_ops(self, merge_success, merged_gid):
+        self.renumber_gid_post_merge(merged_gid)
+        self.recalculate_ngrains_post_merge()
+        # Update lgi
+        # Update neigh_gid
+        pass
+
+    def renumber_gid_post_grain_merge(self, merged_gid):
+        # self._gid_bf_merger_ = deepcopy(self.gid) # May nor be needed
+        GID_left = self.gid[0:merged_gid-1]
+        GID_right = [gid-1 for gid in self.gid[merged_gid:]]
+        self.gid = GID_left + GID_right
+
+    def recalculate_ngrains_post_grain_merge(self):
+        # gid must have been recalculated for tjhis as a pre-requisite.
+        self.n = len(self.gid)
+
+    def renumber_lgi_post_grain_merge(self, merged_gid):
+        LGI_left = self.lgi[self.lgi < merged_gid]
+        self.lgi[self.lgi > merged_gid] -= 1
+
+    def validate_propnames(self, mpnames, return_type='dict'):
+        """
+        Validate an iterable containing propnames. Mostly for internal use.
+
+        Parameters
+        ----------
+        mpnames: dth.dt.ITERABLES
+            Property names to be validated.
+        return_type: str
+            Type of function return. Valid choices: dict (default), list,
+            tuple.
+
+        Returns
+        -------
+        validation: dict (default) / tuple
+            If return_type is other than dictionary and either list or
+            tuple, or numpy array, only tuple will be returned. If return_type
+            is dict, then dict with mpnames keys and their individual
+            validations will be the values. The values will all be bool.
+            If a property is a valid property, then True, else False.
+
+        Example
+        -------
+        self.validate_propnames(['area', 'perimeter', 'solidity'])
+        """
+        _ = {pn: pn in self.valid_mprops.keys() for pn in mpnames}
+        if return_type == 'dict':
+            return _
+        elif return_type in ('list', 'tuple'):
+            return tuple(_.values())
+        else:
+            raise ValueError('Invalid return_type specification.')
+
+    def check_mpnamevals_exists(self, mpnames, return_type='dict'):
+        if return_type == 'dict':
+            return {mpn: mpn in self.prop.columns for mpn in mpnames}
+        elif return_type in ('list', 'tuple'):
+            return [mpn in self.prop.columns for mpn in mpnames]
+
+    def set_mprops(self, mpnames, char_grain_positions=True,
+                   char_gb=False, set_grain_coords=True,
+                   saa=True, throw=False):
+        """
+        Targetted use of char_morph_2d.
+
+        Parameters
+        ----------
+        mpnames: dth.dt.ITERABLES
+            List of user specified names of morphological properties
+        char_grain_positions: bool
+            If True, grain positions will also be characterized. Defaults to
+            True.
+        char_gb:
+            If True, grain boundary will be characterized/re-characterized.
+            Degfaults to False.
+        set_grain_coords:
+            If True, self.g[gn]['grain'].coords will be updated, else not, for
+            all gn in self.gid.
+
+        Example
+        -------
+        self.set_mprops(mpnames, recharacterize=True)
+        """
+        VALMPROPS = deepcopy(self.valid_mprops)
+        # ----------------------------
+        if not all(self.validate_propnames(mpnames, return_type='tuple')):
+            raise ValueError('Invalid propnames.')
+        # ----------------------------
+        for mpn in mpnames:
+            # Check if each user input morph0ological propetrty name and
+            # corresponding values exist in self.prop pd dataFrame.
+            VALMPROPS[mpn] = True
+        if char_grain_positions:
+            VALMPROPS['char_grain_positions'] = True
+        # ----------------------------
+        self.char_morph_2d(bbox=True, bbox_ex=True, append=False, saa=saa,
+                           throw=False, char_gb=char_gb, make_skim_prop=True,
+                           get_grain_coords=set_grain_coords, **VALMPROPS)
+        # ----------------------------
+        if throw:
+            mprop_values = {mpn: self.prop[mpn].to_numpy() for mpn in mpnames}
+        else:
+            mprop_values = {mpn: None for mpn in mpnames}
+
+        return mprop_values
+
+    def get_mprops(self, mpnames, set_missing_mprop=False):
+        """
+        Get values of mpnames.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+        mcgs.simulate()
+        mcgs.detect_grains()
+        mcgs.gs[mcgs.m[-1]].char_morph_2d(bbox=True, bbox_ex=True,
+                                     area=True,aspect_ratio=True,
+                                     make_skim_prop=True,)
+
+        mpnames=['area', 'aspect_ratio', 'perimeter', 'solidity']
+        mcgs.gs[mcgs.m[-1]].prop
+        mprop_values = mcgs.gs[mcgs.m[-1]].get_mprops(mpnames,
+                                                      set_missing_mprop=True)
+        mprop_values
+        """
+        if not all(self.validate_propnames(mpnames, return_type='list')):
+            raise ValueError('Invalid mpname values.')
+        val_exists = self.check_mpnamevals_exists(mpnames, return_type='dict')
+        # ----------------------------
+        if not set_missing_mprop:
+            mprop_values = {}
+            for mpn in mpnames:
+                if val_exists[mpn]:
+                    mprop_values[mpn] = self.prop[mpn].to_numpy()
+                else:
+                    mprop_values[mpn] = None
+        # ----------------------------
+        if set_missing_mprop:
+            set_propnames = [mpn for mpn in mpnames if not val_exists[mpn]]
+            self.set_mprops(mpnames, char_grain_positions=False,
+                            char_gb=False, set_grain_coords=False)
+            mprop_values = self.get_mprops(mpnames, set_missing_mprop=False)
+
+        return mprop_values
+
+    def validata_gids(self, gids):
+        """
+        Validate the gid values.
+
+        Parameters
+        ----------
+        gids: Iterable of ints.
+
+        Returns
+        -------
+        True if all gids are in self.gid else False
+        """
+        return all([gid in self.gid for gid in gids])
+
+    def get_gids_in_params_bounds(self,
+                                  search_gid_source='all',
+                                  search_gids=None,
+                                  mpnames=['area', 'aspect_ratio',
+                                           'perimeter', 'solidity'],
+                                  fx_stats=[np.mean, np.mean, np.mean, np.mean],
+                                  pdslh=[[50, 50], [50, 50], [50, 50], [50, 50]],
+                                  param_priority=[1, 2, 3, 2],
+                                  plot_mprop=True
+                                  ):
+        """
+        pdslh: Percentages of distance from stat to minimum and stat to maximum.
+
+        Example
+        -------
+        """
+        # Validations
+        # ---------------------------
+        pname_val = self.validate_propnames(mpnames, return_type='dict')
+        # pname_val = mcgs.gs[35].validate_propnames(mpnames, return_type='dict')
+        mprop_values = self.get_mprops(mpnames, set_missing_mprop=True)
+        # mcgs.gs[35].prop
+        # mprop_values = mcgs.gs[35].get_mprops(mpnames, set_missing_mprop=True)
+        # ---------------------------
+        '''Sub-select gids as per user request.'''
+        if search_gid_source == 'user' and dth.IS_ITER(search_gids):
+            if self.validata_gids(search_gids):
+                search_gids = np.sort(search_gids)
+                for mpn in mpnames:
+                    mprop_values[mpn] = mprop_values[mpn][search_gids]
+        # ---------------------------
+        '''Data processing and extract indices of parameters for parameter
+        values valid to the user provided bound.'''
+        mprop_KEYS = list(mprop_values.keys())
+        mprop_VALS = list(mprop_values.values())
+        mpinds = {mpn: None for mpn in mprop_KEYS}
+        mp_stats = {mpn: None for mpn in mprop_KEYS}
+        mp_bounds = {mpn: None for mpn in mprop_KEYS}
+        for i, (KEY, VAL) in enumerate(zip(mprop_KEYS, mprop_VALS)):
+            masked_VAL = np.ma.masked_invalid(VAL)
+            # Compute the stat value of the morpho prop
+            mp_stat = fx_stats[i](masked_VAL)
+            mp_stats[KEY] = mp_stat
+            # COmpute min and max of the mprop array
+            mp_gmin, mp_gmax = np.min(masked_VAL), np.max(masked_VAL)
+            # Compute distance from stat to low and stat to high
+            mp_dlow, mp_dhigh = abs(mp_stat-mp_gmin), abs(mp_stat-mp_gmax)
+            # Compute bounds of arrays using varper
+            dfsmin = pdslh[i][0]/100  # Distance factor from stat to prop min.
+            dfsmax = pdslh[i][1]/100  # Distance factor from stat to prop max.
+            # Compute lower bound and upper boubnd
+            boundlow = mp_stat - dfsmin*mp_dlow
+            boundhigh = mp_stat + dfsmax*mp_dhigh
+            mp_bounds[KEY] = [boundlow, boundhigh]
+            # Mask the mprop array and get indices
+            mpinds[KEY] = np.where((VAL >= boundlow) & (VAL <= boundhigh))[0]
+            # ---------------------------
+
+        # Find the intersection
+        intersection = find_intersection(mpinds.values())
+        # Find the union with counts
+        union, counts = find_union_with_counts(mpinds.values())
+        # Copnvert array indices to gid notation.
+        intersection = [i+1 for i in intersection]
+        union = [u+1 for u in union]
+        counts = {c+1: v for c, v in counts.items()}
+        mpinds_gids = {}
+        for mpn in mpinds:
+            mpinds_gids[mpn] = [i+1 for i in mpinds[mpn]]
+        # Collate the GID related results
+        GIDs = {'intersection': intersection,
+                'union': union,
+                'presence': counts,
+                'mpmapped': mpinds_gids}
+        # Collate the Values and Indices related results
+        VALIND = {'stat': mp_stats,
+                  'statmap': fx_stats,
+                  'bounds': mp_bounds,
+                  'indices': mpinds,
+                  }
+
+        if plot_mprop:
+            fig, ax = plt.subplots(nrows=1, ncols=len(GIDs['mpmapped'].keys()),
+                                   figsize=(5, 5), dpi=120, sharey=True)
+            for i, mpn in enumerate(GIDs['mpmapped'].keys(), start=0):
+                LGI = deepcopy(self.lgi)
+                if len(GIDs['mpmapped'][mpn]) > 0:
+                    for gid in self.gid:
+                        if gid in GIDs['mpmapped'][mpn]:
+                            pass
+                        else:
+                            LGI[LGI == gid] = -10
+                ax[i].imshow(LGI, cmap='nipy_spectral')
+                bounds = ", ".join(f"{b:.2f}" for b in VALIND['bounds'][mpn])
+                ax[i].set_title(f"{mpn}: bounds: [{bounds}]", fontsize=10)
+
+        return GIDs, VALIND
+
+    def get_gid_mprop_map(self, mpropname, querry_gids):
+        """
+        Provide gid mapped values of a valid mprop for valid querry_gids.
+
+        Parameters
+        ----------
+        mpropname: str
+        querry_gids: Iterable
+
+        Returns
+        -------
+        gid_mprop_map: dict
+            Dictionary with querry_gids keys and corresponding mprop values.
+        """
+        # Validations
+        self.validate_propnames([mpropname])
+        self.validata_gids(querry_gids)
+        # ------------------------------------
+        if mpropname in self.prop.columns:
+            mpvalues = self.prop.loc[[gid-1 for gid in list(querry_gids)],
+                                     'aspect_ratio'].to_numpy()
+            gid_mprop_map = {gid: mpv
+                             for gid, mpv in zip(querry_gids, mpvalues)}
+            return gid_mprop_map
+        else:
+            raise ValueError(f'mpropname must be in {list(self.prop.columns())}.')
+
+    def map_scalar_to_lgi(self, scalars_dict, default_scalar=-1,
+                          plot=True, throw_axis=True, plot_centroid=True,
+                          plot_gid_number=True,
+                          title='title',
+                          centroid_kwargs={'marker': 'o',
+                                           'mfc': 'yellow',
+                                           'mec': 'black',
+                                           'ms': 2.5},
+                          gid_text_kwargs={'fontsize': 10},
+                          title_kwargs={'fontsize': 10},
+                          label_kwargs={'fontsize': 10}):
+        """
+        Map to LGI, the gid keyed values in scalars_dict.
+
+        Parameters
+        ----------
+        scalars_dict: dict
+            Dictionary with keys being a subset of self.gid. Each key must have
+            a single numeric or bool value.
+        default_scalar: int
+            Defauts to -1.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxt = mcgs()
+        pxt.simulate()
+        pxt.detect_grains()
+        tslice = 10
+        def_neigh = pxt.gs[tslice].get_upto_nth_order_neighbors_all_grains_prob
+
+        neigh1 = def_neigh(1.38, recalculate=False, include_parent=True)
+
+        sf_no = pxt.gs[tslice]
+
+
+
+        from upxo.ggrowth.mcgs import mcgs
+        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+        mcgs.simulate()
+        mcgs.detect_grains()
+        mcgs.gs[35].char_morph_2d(bbox=True, bbox_ex=True, area=True,
+                                  aspect_ratio=True,
+                                  make_skim_prop=True,)
+        GIDs, VALIND = mcgs.gs[35].get_gids_in_params_bounds(mpnames=['aspect_ratio', 'area'],
+                                              fx_stats=[np.mean, np.mean],
+                                              pdslh=[[50, 30], [50, 30]], plot_mprop=False
+                                              )
+        mcgs.gs[35].map_scalar_to_lgi(GIDs['presence'], default_scalar=-1,
+                              plot=True, throw_axis=True)
+
+        gid_mprop_map = mcgs.gs[35].get_gid_mprop_map('aspect_ratio',
+                                                      GIDs['mpmapped']['aspect_ratio'])
+        MPLGIAX = mcgs.gs[35].map_scalar_to_lgi(gid_mprop_map, default_scalar=-1,
+                              plot=True, throw_axis=True)
+        """
+        # Validations
+        self.validata_gids(scalars_dict.keys())
+        # -------------------
+        LGI = deepcopy(self.lgi).astype(float)
+        for gid in self.gid:
+            if gid in scalars_dict.keys():
+                LGI[LGI == gid] = scalars_dict[gid]
+            else:
+                LGI[LGI == gid] = default_scalar
+        # -------------------
+        if plot:
+            # VMIN, VMAX = min(scalars_dict.values()), max(scalars_dict.values())
+            plt.figure(figsize=(5, 5), dpi=120)
+            plt.imshow(LGI, cmap='viridis')
+            if plot_centroid or plot_gid_number:
+                centroid_x, centroid_y = [], []
+                for gid in scalars_dict.keys():
+                    centroid_x.append(self.xgr[self.lgi == gid].mean())
+                    centroid_y.append(self.ygr[self.lgi == gid].mean())
+            if plot_centroid:
+                plt.plot(centroid_x, centroid_y, linestyle='None',
+                         marker=centroid_kwargs['marker'],
+                         mfc=centroid_kwargs['mfc'],
+                         mec=centroid_kwargs['mec'],
+                         ms=centroid_kwargs['ms'])
+            if plot_gid_number:
+                for i, (cenx, ceny) in enumerate(zip(centroid_x,
+                                                     centroid_y), start=1):
+                    plt.text(cenx, ceny, str(i),
+                             fontsize=gid_text_kwargs['fontsize'])
+            ax = plt.gca()
+            ax.set_title('Title', fontsize=10)
+            ax.set_xlabel(r"X-axis, $\mu m$", fontsize=10)
+            ax.set_ylabel(r"Y-axis, $\mu m$", fontsize=10)
+            plt.colorbar()
+        # -------------------
+        if plot and throw_axis:
+            return {'lgi': LGI, 'ax': ax}
+        else:
+            return {'lgi': LGI, 'ax': None}
+
+    def merge_two_neigh_grains_simple(self,
+                                      method_id='1',
+                                      method_params_parent_sel=['area'],
+                                      method_params_other_sel=['area'],
+                                      method_params_merging=['area'],
+                                      parent_gid=[],
+                                      return_gids=True,
+                                      plot_gs_bf=True,
+                                      plot_gs_af=True,
+                                      plot_area_kde_diff=True,
+                                      bandwidth=1.0):
+        """
+        Find two random neighbouring grains and merge them.
+
+        Parameters
+        ----------
+        method_id: int
+            0: parenmt_gid will be selected at random and other_gid will also
+                be selected at random.
+            1: parent_gid should be provided by user and othet_gid should also
+                be provided by user.
+            2: parent_gid sahould be provide by user and other_gid will be
+                selected at random.
+            NOTE: other_grain will allways be O(1) neighbour of parent_grain.
+        method_params_parent_sel: str
+            Morphological parameter of choice for parent grain selection.
+        method_params_other_sel: str
+            Morphological parameter of choice for other grain selection.
+        method_params_merging: str
+            Morphological parameter of choice for merging decision makjing.
+        plot_bf: bool
+            Plot grain structure before merging. Defaults to True.
+        plot_af: bool
+            Plot grain structure after merging. Defaults to True.
+
+        Returns
+        -------
+        gids: list
+            [parent_gid, other_gid]. Other_gid merged into parent_gid.
+        """
+        def plot_kde_difference(area1, area2, bandwidth=1):
+            """
+            Calculates KDEs for two arrays of data and plots their difference.
+
+            Parameters
+            ----------
+            area1: np.ndarray
+                The first array of data.
+            area2: np.ndarray
+                The second array of data.
+            bandwidth: float, optional
+                The bandwidth (smoothing parameter) for KDEs (default: 0.2).
+            """
+            plt.figure(figsize=(5,5), dpi=120)
+            kde1 = sns.kdeplot(area1, bw_adjust=bandwidth, fill=True,
+                               label='Area 1', color='blue')
+            kde2 = sns.kdeplot(area2, bw_adjust=bandwidth, fill=True,
+                               label='Area 2', color='orange')
+            # Get the KDE curve data
+            x1, y1 = kde1.get_lines()[0].get_data()
+            x2, y2 = kde2.get_lines()[0].get_data()
+            # Interpolate if x values don't exactly match
+            # (to ensure we can subtract)
+            y2_interp = np.interp(x1, x2, y2)
+            # Calculate and plot the difference
+            y_diff = y1 - y2_interp
+            plt.fill_between(x1, y_diff, 0, color='green',
+                             alpha=0.5, label='Difference (Area 1 - Area 2)')
+            # Label axes and add a title
+            plt.xlabel('Area')
+            plt.ylabel('Density')
+            plt.title('KDEs of area distributions and their difference.')
+            plt.legend()
+            plt.show()
+        # ============================================================
+        if method_id == '1':
+            '''parenmt_gid will be selected at random and other_gid will also
+            be selected at random. NOTE: other_grain will allways be O(1)
+            neighbour of parent_grain.'''
+            parent_gid, other_gid = self.get_two_rand_o1_neighs()
+        if method_id == '2':
+            '''parent_gid should be provided by user and othet_gid should also
+            be provided by user.'''
+            parent_gid = parent_gid
+            other_gid = self.get_o1_neigh(parent_gid)
+            parent_gid, other_gid = self.get_two_rand_o1_neighs()
+        if method_id == '3':
+            '''parent_gid sahould be provide by user and other_gid will be
+            selected at random. NOTE: other_grain will allways be O(1)
+            neighbour of parent_grain.'''
+            pass
+        if method_id == '1-stat($varper$)':
+            '''method1 + more. Below provides deytails.
+            stat: statistic. Valids: mean, median.
+            varper: percentage variation in the stat defining target area
+            bound for parent_gid.
+            '''
+            pass
+        # -------------------------------------
+        if plot_gs_bf:
+            self.plotgs(plot_centroid=True, plot_gid_number=True,
+                        plot_cbar=False,
+                        title=f'Before merging {other_gid} into {parent_gid}.')
+        # -------------------------------------
+        if plot_area_kde_diff:
+            # Get area before merging
+            area_bf = self.prop['area'].to_numpy()
+        # -------------------------------------
+        self.merge_two_neigh_grains(parent_gid, other_gid,
+                                    check_for_neigh=False,
+                                    simple_merge=True,)
+        # -------------------------------------
+        if plot_gs_af:
+            self.plotgs(plot_centroid=True,
+                        plot_gid_number=True,
+                        plot_cbar=False,
+                        title=f'After merging {other_gid} into {parent_gid}')
+        # -------------------------------------
+        if plot_area_kde_diff:
+            area_af = deepcopy(area_bf)
+            area_af[parent_gid-1] += area_af[other_gid-1]
+            area_af = np.delete(area_af, other_gid-1)
+            # Get area after merging
+            plot_kde_difference(area_bf, area_af, bandwidth=bandwidth)
+        # -------------------------------------
+        if return_gids:
+            return parent_gid, other_gid
+
+    def merge_neigh_grains(self, gid_pairs,
+                           check_for_neigh=True, simple_merge=True):
+        hit = 0
+        for parent_gid, other_gid in gid_pairs:
+            if self.check_for_neigh(parent_gid, other_gid):
+                self.merge_two_neigh_grains(parent_gid, other_gid,
+                                            check_for_neigh=check_for_neigh,
+                                            simple_merge=simple_merge)
+
+    def set_twingen(self, vf=0.2, tspec='absolute', trel='minil',
+                    tdis='user', t=[0.2, 0.5, 0.6, 0.7], tw=[1, 1, 1, 1],
+                    tmin=0.2, tmean=0.5, tmax=1.0,
+                    nmax_pg=1, placement='centroid', factor_min=0.0,
+                    factor_max=1.0,
+                    ):
+        self.twingen = twingen(vf=0.2, tmin=0.2, tmean=0.5, tmax=1.0,
+                     tdis='user', tvalues=[0.2, 0.5, 1.0, 0.75],
+                     allow_partial=True, partial_prob=0.2)
+
+    def introduce_single_twins(self, GIDs=[1], full_twin=True,
+                               throw_lgi=True,
+                               LFAL_kwargs={'factor': 0.5,
+                                            'angle_min': 0,
+                                            'angle_max': 360,
+                                            'length': 50},
+                               twdis_kwargs={'max_count_per_grain': 1,
+                                             'min_thickness': 4.5,
+                                             'mean_thickness': 4.5,
+                                             'max_thickness': 4.5,
+                                             'distribution': 'normal',
+                                             'variance': 1.0,
+                                             },
+                               plotgs_original=True,
+                               plotgs_twinned=True,
+                               save_to_features=True,
+                               ):
+        """
+        Introduce twinned grain features into self.lgi.
+
+        Parameters
+        ----------
+        GIDs: Iterable
+            Iterable of grain ID numbers which would host the twin regions.
+        throw_lgi: bool
+            Return the new LGI array.
+        plot: bool
+            Plot if Trure else, not.
+
+        LFAL_kwargs:
+            location, factor, angle and length kwargs for UPXO.sline2d.
+
+        twdis_kwargs: Twin Distribution kwargs
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+        mcgs.simulate()
+        mcgs.detect_grains()
+        mcgs.gs[35].char_morph_2d(bbox=True, bbox_ex=True, area=True,
+                                  aspect_ratio=True, perimeter=True, solidity=True,
+                                  make_skim_prop=True,)
+        mcgs.gs[35].prop.columns
+        mcgs.gs[35].find_neigh()
+        mcgs.gs[35].g[12]['grain'].coords
+        mcgs.gs[35].g[12]['grain'].centroid
+        GIDs, VALIND = mcgs.gs[35].get_gids_in_params_bounds(mpnames=['area'],
+                                              fx_stats=[np.mean],
+                                              pdslh=[[50, 50]],
+                                              plot_mprop=False
+                                              )
+        gids = GIDs['mpmapped']['area']
+        mcgs.gs[35].introduce_single_twins(GIDs=gids, full_twin=True,
+                                   throw_lgi=True, plotgs_original=False,
+                                   plotgs_twinned=True)
+        """
+        # Validations
+        # -----------------------------------------
+        if plotgs_original:
+            self.plotgs(figsize=(6, 6), dpi=120,
+                        cmap='coolwarm', plot_centroid=True,
+                        centroid_kwargs={'marker': 'o', 'mfc': 'yellow',
+                                         'mec': 'black', 'ms': 2.5},
+                        plot_gid_number=True)
+        # -----------------------------------------
+        gscoords = (self.xgr.ravel(), self.ygr.ravel())
+        LGI_1 = deepcopy(self.lgi)
+        # -----------------------------------------
+        for gid in GIDs:
+            LGI = deepcopy(self.lgi).ravel()
+            xc = self.xgr[self.lgi == gid].mean()
+            yc = self.ygr[self.lgi == gid].mean()
+            remaining_indices = list(range(gscoords[0].size))
+            # -----------------------------------------
+            lines = [sl2d.by_LFAL(location=[xc, yc], **LFAL_kwargs)]
+            # -----------------------------------------
+            twin_indices = []
+            for line in lines:
+                _fx_ = line.find_neigh_point_by_perp_distance
+                _twin_indices_ = _fx_(gscoords, 4.5, use_bounding_rec=True)
+                if _twin_indices_:
+                    twin_indices.append(_twin_indices_)
+                    remaining_indices = list(set(remaining_indices) - set(_twin_indices_))
+            # -----------------------------------------
+            LGI[twin_indices[0]] = -1
+            LGI = np.reshape(LGI, self.lgi.shape)
+            LGI_1[(LGI == -1) & (LGI_1 == gid)] = -1
+        # -----------------------------------------
+        self.plotgs(figsize=(6, 6), dpi=120,
+                    cmap='coolwarm', custom_lgi=LGI_1,
+                    plot_centroid=True,
+                    centroid_kwargs={'marker': 'o', 'mfc': 'yellow',
+                                     'mec': 'black', 'ms': 2.5},
+                    plot_gid_number=True)
+
+    def add_pxtal(self):
+        from upxo.pxtal.pxtal_ori_map_2d import polyxtal2d as PXTAL
+        if len(self.pxtal.keys()) == 0:
+            self.pxtal[1] = PXTAL()
+        else:
+            self.pxtal[max(list(self.pxtal.keys()))+1] = PXTAL()
+
+    def set_pxtal(self, instance_no=1,
+                  path_filename_noext=None,
                   map_type='ebsd',
-                  path=None,
-                  file_name_with_ext=None):
+                  apply_kuwahara=False, kuwahara_misori=5, gb_misori=10,
+                  min_grain_size=1,
+                  print_closs=True,
+                  ):
         """
-        Crystal Orientation Map. EBSD dataswt is one which can be loadsed
-        EXAMPLE CALL
-        ------------
-        fileName = r'D:\export_folder\sunil'
-        pxt.gs[8].xomap = ebsd(fileName)
-        pxt.gs[tslice].xomap_set(map_type='ebsd',
-                                 path=r"D:/export_folder/",
-                                 file_name_with_ext=r"sunil.ctf")
+        Crystal Orientation Map. EBSD dataswt is one which can be loadsed.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxt = mcgs()
+        pxt.simulate()
+        pxt.detect_grains()
+        tslice = 20  # Temporal slice number
+        pxt.char_morph_2d(tslice)
+        pxt.gs[tslice].export_ctf(r'D:\export_folder', 'sunil')
+        path_filename_noext = r'D:\export_folder\sunil'
+        pxt.gs[tslice].set_pxtal(path_filename_noext=path_filename_noext)
+        pxt.gs[tslice].pxtal.map
         """
-        # ---------------------------------------
-        # VALIDATE USER INPUTS
-        self.val.val_filename_has_ext(file_name_with_ext)
-        self.val.val_file_exists(path, file_name_with_ext)
-        # ---------------------------------------
-        from upxo.interfaces.defdap.importebsd import ebsd_data
-        # ---------------------------------------
-        self.xomap = ebsd_data(Path(path)/file_name_with_ext)
-
-    def xomap_prepare(self,
-                      kuwahara=False,
-                      filter_misori=5):
-        if kuwahara:
-            # Implement the Kuwahara filter, from DefDap native
-            self.xomap.map.filterData(misOriTol=filter_misori)
-        self.xomap.map.buildQuatArray()
-
-    def xomap_extract_features(self,
-                               gb_misori=10,
-                               min_grain_size=1):
-        self.xomap.map.findBoundaries(boundDef=gb_misori)
-        self.xomap.map.findGrains(minGrainSize=min_grain_size)
-        self.xomap.map.buildNeighbourNetwork()
-
-    def xomap_plot_grains(self):
-        self.xomap.map.plotGrainMap()
-
-    def xomap_plot_gb(self):
-        self.xomap.map.plotBoundaryMap()
-
-    def xomap_plot_phase(self):
-        self.xomap.map.plotPhaseMap()
-
-    def xomap_plot_bc(self):
-        self.xomap.map.plotBandContrastMap()
-
-    def xomap_plot_ea(self):
-        self.xomap.map.plotEulerMap()
-
-    def xomap_lgi(self):
-        '''
-        Returns the pixel - grain ID mapping
-        '''
-        # ---- > Equivalent to pxt.gs[8].lgi
-        return self.xomap.map.grains
-
-    def xomap_get_data(self):
-        self.xomap.map.quatArray
-        self.xomap.map.eulerAngleArray
-        # ACCESS GRAINS:
-        self.xomap.map.grainList[0].coordList
-
-    def xomap_pathc(self, xomap=None):
-        self.xomap = xomap
+        IN, _fn_ = instance_no, path_filename_noext
+        _khfflag_, _khfmo_ = apply_kuwahara, kuwahara_misori
+        # -------------------------------------------
+        self.add_pxtal()
+        print(_fn_)
+        self.pxtal[IN].setup(map_type='ebsd',
+                             path_filename_noext=_fn_,
+                             apply_kuwahara=_khfflag_,
+                             kuwahara_misori=_khfmo_,)
+        self.pxtal[IN].find_grains_gb(gb_misori=gb_misori,
+                                      min_grain_size=min_grain_size,
+                                      print_msg=True,)
+        self.pxtal[IN].port_essentials(print_msg=True)
+        # self.pxtal[IN].char_grain_positions_2d()
+        self.pxtal[IN].set_conversion_loss(refn=np.unique(self.lgi).size)
+        self.find_grain_boundary_junction_points(xorimap=True, IN=IN)
+        self.pxtal[IN].set_bjp()
+        self.pxtal[IN].find_neigh(update_gid=True, reset_lgi=False)
+        self.pxtal[IN].find_gbseg1()
 
     def __make_linear_grid(self, sf=1):
         # Validate for maximum sf
@@ -939,234 +2069,374 @@ class mcgs2_grain_structure():
                 for value in self.positions[pos]:
                     self.positions['boundary'].append(value)
 
+    def find_border_internal_grains_fast(self):
+        """
+        Identify border and internal grains.
+
+        Parameters
+        ----------
+        None
+
+        Return
+        ------
+        border_gids: ids of border grains
+        internal_gids: ids of internal grains
+        lgi_border: lgi of only border grains
+        lgi_internal: lgi of only internal grains
+
+        Use
+        ---
+        border_gids, internal_gids, lgi_border, lgi_internal = find_border_internal_grains_fast()
+
+        plt.figure()
+        plt.imshow(lgi_border)
+
+        plt.figure()
+        plt.imshow(lgi_internal)
+
+        """
+        lgi = self.lgi
+        lgi_border = deepcopy(lgi)
+        lgi_border[1:-1, 1:-1] = 0
+        border_gids = np.unique(lgi_border[lgi_border != 0])
+        internal_gids = np.array(list(set(self.gid) - set(border_gids)))
+
+        lgi_border = deepcopy(lgi)
+
+        lgi_internal = deepcopy(lgi)
+
+        for bgid in border_gids:
+            lgi_internal[lgi_internal == bgid] = 0
+
+        for nbgid in internal_gids:
+            lgi_border[lgi_border == nbgid] = 0
+
+        return border_gids, internal_gids, lgi_border, lgi_internal
+
+    def find_grain_size_fast(self, metric='npixels'):
+        """
+        Quickly find the grain sizes without doing anything else.
+
+        Explanations
+        ------------
+        Order of grain_sizes is that of pxtal.gs[m].gid
+
+        Parameters
+        ----------
+        metric: Specify which ares metric is needed. Optoins include:
+            * 'npixels': Number of pixels
+            * 'pxarea': Pixel wise calculated area
+            * 'eq_dia': Equivalent diameter
+
+        Return
+        ------
+        grain_sizes: Numpy array of grain areas.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        grain_areas_all_grains = pxtal.gs[2].find_grain_size_fast(metric='npixels')
+        """
+        grain_sizes = []
+        if metric in ('npixels'):
+            for gid in self.gid:
+                grain_sizes.append(np.where(self.lgi == gid)[0].size)
+
+        return np.array(grain_sizes)
+
+    def find_npixels_border_grains_fast(self, metric='npixels'):
+        """
+        Find the number of pixels in each of the border grains.
+
+        Parameters
+        ----------
+        metric: Specify which ares metric is needed. Optoins include:
+            * 'npixels': Number of pixels
+            * 'pxarea': Pixel wise calculated area
+            * 'eq_dia': Equivalent diameter
+
+        Return
+        ------
+        border_grain_npixels: Numpy array of number of pixels in each border
+            grain.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        grain_areas_border_grains = pxtal.gs[2].find_npixels_border_grains_fast(metric='npixels')
+        """
+        border_gids, _, __, ___ = self.find_border_internal_grains_fast()
+
+        border_grain_npixels = []
+
+        if metric in ('npixels'):
+            for bg in border_gids:
+                border_grain_npixels.append(np.where(self.lgi == bg)[0].size)
+
+        return np.array(border_grain_npixels)
+
+    def find_npixels_internal_grains_fast(self, metric='npixels'):
+        """
+        Find the number of pixels in each of the internal grains.
+
+        Parameters
+        ----------
+        metric: Specify which ares metric is needed. Optoins include:
+            * 'npixels': Number of pixels
+            * 'pxarea': Pixel wise calculated area
+            * 'eq_dia': Equivalent diameter
+
+        Reyturn
+        -------
+        internal_grain_npixels: Numpy array of number of pixels in each
+            internal grain.
+
+        Example
+        -------
+        from upxo.ggrowth.mcgs import mcgs
+        pxtal = mcgs(study='independent',input_dashboard='input_dashboard.xls')
+        pxtal.simulate()
+        pxtal.detect_grains()
+        grain_areas_internal_grains = pxtal.gs[2].find_npixels_internal_grains_fast(metric='npixels')
+        """
+        _, internal_grains, __, ___ = self.find_border_internal_grains_fast()
+
+        internal_grain_npixels = []
+
+        if metric in ('npixels'):
+            for ig in internal_grains:
+                internal_grain_npixels.append(np.where(self.lgi == ig)[0].size)
+
+        return np.array(internal_grain_npixels)
+
+    def find_ags(self, grains_to_include='all', gids=None, method='npixels'):
+        if grains_to_include == 'all':
+            pass
+        elif grains_to_include == 'border':
+            pass
+        elif grains_to_include == 'internal':
+            pass
+        elif grains_to_include in ('gid', 'gids'):
+            pass
+        return ags
+
     def find_prop_npixels(self):
         # Get grain NUMBER OF PIXELS into pandas dataframe
-        if self.prop_flag['npixels']:
-            npixels = []
-            for g in self.g.values():
-                npixels.append(len(g['grain'].loc))
-            self.prop['npixels'] = npixels
-            if self.display_messages:
-                print('    Number of Pixels making the grains: DONE')
+        # if self.prop_flag['npixels']:
+        npixels = []
+        for g in self.g.values():
+            npixels.append(len(g['grain'].loc))
+        self.prop['npixels'] = npixels
+        if self.display_messages:
+            print('    Number of Pixels making the grains: DONE')
 
     def find_prop_npixels_gb(self):
         # Get grain GRAIN BOUNDARY LENGTH (NO. PIXELS) into pandas dataframe
-        if self.prop_flag['npixels_gb']:
-            npixels_gb = []
-            for g in self.g.values():
-                npixels_gb.append(len(g['grain'].gbloc))
-            self.prop['npixels_gb'] = npixels_gb
-            if self.display_messages:
-                print('    Number of Pixels in grain bound. of grains: DONE')
+        # if self.prop_flag['npixels_gb']:
+        npixels_gb = []
+        for g in self.g.values():
+            npixels_gb.append(len(g['grain'].gbloc))
+        self.prop['npixels_gb'] = npixels_gb
 
     def find_prop_gb_length_px(self):
         # Get grain GRAIN BOUNDARY LENGTH (NO. PIXELS) into pandas dataframe
-        if self.prop_flag['gb_length_px']:
-            gb_length_px = []
-            for g in self.g.values():
-                gb_length_px.append(len(g['grain'].gbloc))
-            self.prop['gb_length_px'] = gb_length_px
-            if self.display_messages:
-                print('    Grain Boundary Lengths of grains: DONE')
+        # if self.prop_flag['gb_length_px']:
+        gb_length_px = []
+        for g in self.g.values():
+            gb_length_px.append(len(g['grain'].gbloc))
+        self.prop['gb_length_px'] = gb_length_px
 
     def find_prop_area(self):
         # Get grain AREA into pandas dataframe
-        if self.prop_flag['area']:
-            area = []
-            for g in self.g.values():
-                area.append(g['grain'].skprop.area)
-            self.prop['area'] = area
-            if self.display_messages:
-                print('    Areas of grains: DONE')
+        # if self.prop_flag['area']:
+        area = []
+        for g in self.g.values():
+            area.append(g['grain'].skprop.area)
+        self.prop['area'] = area
 
     def find_prop_eq_diameter(self):
         # Get grain EQUIVALENT DIAMETER into pandas dataframe
-        if self.prop_flag['eq_diameter']:
-            eq_diameter = []
-            for g in self.g.values():
-                eq_diameter.append(g['grain'].skprop.equivalent_diameter_area)
-            self.prop['eq_diameter'] = eq_diameter
-            if self.display_messages:
-                print('    Circle Equivalent Diameter of grains: DONE')
+        # if self.prop_flag['eq_diameter']:
+        eq_diameter = []
+        for g in self.g.values():
+            eq_diameter.append(g['grain'].skprop.equivalent_diameter_area)
+        self.prop['eq_diameter'] = eq_diameter
 
     def find_prop_perimeter(self):
         # Get grain PERIMETER into pandas dataframe
-        if self.prop_flag['perimeter']:
-            perimeter = []
-            for g in self.g.values():
-                perimeter.append(g['grain'].skprop.perimeter)
-            self.prop['perimeter'] = perimeter
-            if self.display_messages:
-                print('    Perimeter of grains: DONE')
+        # if self.prop_flag['perimeter']:
+        perimeter = []
+        for g in self.g.values():
+            perimeter.append(g['grain'].skprop.perimeter)
+        self.prop['perimeter'] = perimeter
 
     def find_prop_perimeter_crofton(self):
         # Get grain CROFTON PERIMETER into pandas dataframe
-        if self.prop_flag['perimeter_crofton']:
-            perimeter_crofton = []
-            for g in self.g.values():
-                perimeter_crofton.append(g['grain'].skprop.perimeter_crofton)
-            self.prop['perimeter_crofton'] = perimeter_crofton
-            if self.display_messages:
-                print('    Crofton Perimeters of grains: DONE')
+        # if self.prop_flag['perimeter_crofton']:
+        perimeter_crofton = []
+        for g in self.g.values():
+            perimeter_crofton.append(g['grain'].skprop.perimeter_crofton)
+        self.prop['perimeter_crofton'] = perimeter_crofton
 
     def find_prop_compactness(self):
         # Get grain COMPACTNESS into pandas dataframe
-        if self.prop_flag['compactness']:
-            compactness = []
-            if self.prop_flag['area']:
-                if self.prop_flag['perimeter']:
-                    for i, g in enumerate(self.g.values()):
-                        area = self.prop['area'][i]
-                        # Calculate area of circle with the same perimeter
-                        # P = pi*D --> D = P/pi
-                        # A = pi*D**2/4 = pi*(P/pi)**2/4 = P/(4*pi)
-                        circle_area = self.prop['perimeter'][i]**2/(4*np.pi)
-                        if circle_area >= self.EPS:
-                            compactness.append(area/circle_area)
-                        else:
-                            compactness.append(1)
-                else:
-                    for i, g in self.g.values():
-                        area = self.prop['area'][i]
-                        circle_area = g['grain'].skprop.perimeter**2/(4*np.pi)
-                        if circle_area >= self.EPS:
-                            compactness.append(area/circle_area)
-                        else:
-                            compactness.append(1)
+        # if self.prop_flag['compactness']:
+        compactness = []
+        if self.prop_flag['area']:
+            if self.prop_flag['perimeter']:
+                for i, g in enumerate(self.g.values()):
+                    area = self.prop['area'][i]
+                    # Calculate area of circle with the same perimeter
+                    # P = pi*D --> D = P/pi
+                    # A = pi*D**2/4 = pi*(P/pi)**2/4 = P/(4*pi)
+                    circle_area = self.prop['perimeter'][i]**2/(4*np.pi)
+                    if circle_area >= self.EPS:
+                        compactness.append(area/circle_area)
+                    else:
+                        compactness.append(1)
             else:
-                if self.prop_flag['perimeter']:
-                    for i, g in self.g.values():
-                        area = g['grain'].skprop.area
-                        circle_area = self.prop['perimeter'][i]**2/(4*np.pi)
-                        if circle_area >= self.EPS:
-                            compactness.append(area/circle_area)
-                        else:
-                            compactness.append(1)
-                else:
-                    for i, g in self.g.values():
-                        area = g['grain'].skprop.area
-                        circle_area = g['grain'].skprop.perimeter**2/(4*np.pi)
-                        if circle_area >= self.EPS:
-                            compactness.append(area/circle_area)
-                        else:
-                            compactness.append(1)
+                for i, g in self.g.values():
+                    area = self.prop['area'][i]
+                    circle_area = g['grain'].skprop.perimeter**2/(4*np.pi)
+                    if circle_area >= self.EPS:
+                        compactness.append(area/circle_area)
+                    else:
+                        compactness.append(1)
+        else:
+            if self.prop_flag['perimeter']:
+                for i, g in self.g.values():
+                    area = g['grain'].skprop.area
+                    circle_area = self.prop['perimeter'][i]**2/(4*np.pi)
+                    if circle_area >= self.EPS:
+                        compactness.append(area/circle_area)
+                    else:
+                        compactness.append(1)
+            else:
+                for i, g in self.g.values():
+                    area = g['grain'].skprop.area
+                    circle_area = g['grain'].skprop.perimeter**2/(4*np.pi)
+                    if circle_area >= self.EPS:
+                        compactness.append(area/circle_area)
+                    else:
+                        compactness.append(1)
 
-            self.prop['compactness'] = compactness
-            if self.display_messages:
-                print('    Compactness of grains: DONE')
+        self.prop['compactness'] = compactness
 
     def find_prop_aspect_ratio(self):
         # Get grain ASPECT RATIO into pandas dataframe
-        if self.prop_flag['aspect_ratio']:
-            aspect_ratio = []
-            for g in self.g.values():
-                maj_axis = g['grain'].skprop.major_axis_length
-                min_axis = g['grain'].skprop.minor_axis_length
-                if min_axis <= self.EPS:
-                    aspect_ratio.append(np.inf)
-                else:
-                    aspect_ratio.append(maj_axis/min_axis)
-            self.prop['aspect_ratio'] = aspect_ratio
-            if self.display_messages:
-                print('    Aspect Ratios of grains: DONE')
+        # if self.prop_flag['aspect_ratio']:
+        aspect_ratio = []
+        for g in self.g.values():
+            maj_axis = g['grain'].skprop.major_axis_length
+            min_axis = g['grain'].skprop.minor_axis_length
+            if min_axis <= self.EPS:
+                aspect_ratio.append(np.inf)
+            else:
+                aspect_ratio.append(maj_axis/min_axis)
+        self.prop['aspect_ratio'] = aspect_ratio
 
     def find_prop_solidity(self):
         # Get grain SOLIDITY into pandas dataframe
-        if self.prop_flag['solidity']:
-            solidity = []
-            for g in self.g.values():
-                solidity.append(g['grain'].skprop.solidity)
-            self.prop['solidity'] = solidity
-            if self.display_messages:
-                print('    Solidity of grains: DONE')
+        # if self.prop_flag['solidity']:
+        solidity = []
+        for g in self.g.values():
+            solidity.append(g['grain'].skprop.solidity)
+        self.prop['solidity'] = solidity
 
     def find_prop_circularity(self):
         # Get grain CIRCULARITY into pandas dataframe
-        if self.prop_flag['circularity']:
-            circularity = []
-            if self.display_messages:
-                print('    Circularity of grains: DONE')
-            pass
+        # if self.prop_flag['circularity']:
+        circularity = []
 
     def find_prop_major_axis_length(self):
         # Get grain MAJOR AXIS LENGTH into pandas dataframe
-        if self.prop_flag['major_axis_length']:
-            major_axis_length = []
-            for g in self.g.values():
-                major_axis_length.append(g['grain'].skprop.axis_major_length)
-            self.prop['major_axis_length'] = major_axis_length
-            if self.display_messages:
-                print('    Major Axis Length of ellipse fits of grains: DONE')
+        # if self.prop_flag['major_axis_length']:
+        major_axis_length = []
+        for g in self.g.values():
+            major_axis_length.append(g['grain'].skprop.axis_major_length)
+        self.prop['major_axis_length'] = major_axis_length
 
     def find_prop_minor_axis_length(self):
         # Get grain MINOR AXIS LENGTH into pandas dataframe
-        if self.prop_flag['minor_axis_length']:
-            minor_axis_length = []
-            for g in self.g.values():
-                minor_axis_length.append(g['grain'].skprop.axis_minor_length)
-            self.prop['minor_axis_length'] = minor_axis_length
-            if self.display_messages:
-                print('    Minor Axis Length of ellipse fits of grains: DONE')
+        # if self.prop_flag['minor_axis_length']:
+        minor_axis_length = []
+        for g in self.g.values():
+            minor_axis_length.append(g['grain'].skprop.axis_minor_length)
+        self.prop['minor_axis_length'] = minor_axis_length
 
     def find_prop_morph_ori(self):
         # Get grain MORPHOLOGICAL ORIENTATION into pandas dataframe
-        if self.prop_flag['morph_ori']:
-            morph_ori = []
-            for g in self.g.values():
-                morph_ori.append(g['grain'].skprop.orientation)
-            self.prop['morph_ori'] = [mo*180/np.pi for mo in morph_ori]
-            if self.display_messages:
-                print('    Morph. Orientation angle (deg) of grains: DONE')
+        # if self.prop_flag['morph_ori']:
+        morph_ori = []
+        for g in self.g.values():
+            morph_ori.append(g['grain'].skprop.orientation)
+        self.prop['morph_ori'] = [mo*180/np.pi for mo in morph_ori]
 
     def find_prop_feret_diameter(self):
         # Get grain FERET DIAMETER into pandas dataframe
-        if self.prop_flag['feret_diameter']:
-            feret_diameter = []
-            for g in self.g.values():
-                feret_diameter.append(g['grain'].skprop.feret_diameter_max)
-            self.prop['feret_diameter'] = feret_diameter
-            if self.display_messages:
-                print('    Feret Diameter of grains: DONE')
+        # if self.prop_flag['feret_diameter']:
+        feret_diameter = []
+        for g in self.g.values():
+            feret_diameter.append(g['grain'].skprop.feret_diameter_max)
+        self.prop['feret_diameter'] = feret_diameter
 
     def find_prop_euler_number(self):
         # Get grain EULER NUMBER into pandas dataframe
-        if self.prop_flag['euler_number']:
-            euler_number = []
-            for g in self.g.values():
-                euler_number.append(g['grain'].skprop.euler_number)
-            self.prop['euler_number'] = euler_number
-            if self.display_messages:
-                print('    Euler Number of grains: DONE')
+        # if self.prop_flag['euler_number']:
+        euler_number = []
+        for g in self.g.values():
+            euler_number.append(g['grain'].skprop.euler_number)
+        self.prop['euler_number'] = euler_number
 
     def find_prop_eccentricity(self):
         # Get grain ECCENTRICITY into pandas dataframe
-        if self.prop_flag['eccentricity']:
-            eccentricity = []
-            for g in self.g.values():
-                eccentricity.append(g['grain'].skprop.eccentricity)
-            self.prop['eccentricity'] = eccentricity
-            if self.display_messages:
-                print('    Eccentricity of grains: DONE')
-        print("\n")
+        # if self.prop_flag['eccentricity']:
+        eccentricity = []
+        for g in self.g.values():
+            eccentricity.append(g['grain'].skprop.eccentricity)
+        self.prop['eccentricity'] = eccentricity
 
     def build_prop(self):
-        self.find_prop_npixels()
-        self.find_prop_npixels_gb()
-        self.find_prop_gb_length_px()
-        self.find_prop_area()
-        self.find_prop_eq_diameter()
-        self.find_prop_perimeter()
-        self.find_prop_perimeter_crofton()
-        self.find_prop_compactness()
-        self.find_prop_aspect_ratio()
-        self.find_prop_solidity()
-        self.find_prop_circularity()
-        self.find_prop_major_axis_length()
-        self.find_prop_minor_axis_length()
-        self.find_prop_morph_ori()
-        self.find_prop_feret_diameter()
-        self.find_prop_euler_number()
-        self.find_prop_eccentricity()
+        if self.prop_flag['npixels']:
+            self.find_prop_npixels()
+        if self.prop_flag['npixels_gb']:
+            self.find_prop_npixels_gb()
+        if self.prop_flag['gb_length_px']:
+            self.find_prop_gb_length_px()
+        if self.prop_flag['area']:
+            self.find_prop_area()
+        if self.prop_flag['eq_diameter']:
+            self.find_prop_eq_diameter()
+        if self.prop_flag['perimeter']:
+            self.find_prop_perimeter()
+        if self.prop_flag['perimeter_crofton']:
+            self.find_prop_perimeter_crofton()
+        if self.prop_flag['compactness']:
+            self.find_prop_compactness()
+        if self.prop_flag['aspect_ratio']:
+            self.find_prop_aspect_ratio()
+        if self.prop_flag['solidity']:
+            self.find_prop_solidity()
+        if self.prop_flag['circularity']:
+            self.find_prop_circularity()
+        if self.prop_flag['major_axis_length']:
+            self.find_prop_major_axis_length()
+        if self.prop_flag['minor_axis_length']:
+            self.find_prop_minor_axis_length()
+        if self.prop_flag['morph_ori']:
+            self.find_prop_morph_ori()
+        if self.prop_flag['feret_diameter']:
+            self.find_prop_feret_diameter()
+        if self.prop_flag['euler_number']:
+            self.find_prop_euler_number()
+        if self.prop_flag['eccentricity']:
+            self.find_prop_eccentricity()
         # ------------------------------------------
         if self.display_messages:
             count = 1
@@ -1452,25 +2722,25 @@ class mcgs2_grain_structure():
         ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
                                                    range_type='rank',
-                                                   rank_range=[80, 100]
+                                                   value_range=[80, 100]
                                                    )
         Example-2
         ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='area',
                                                    range_type='percentage',
-                                                   rank_range=[80, 100]
+                                                   value_range=[80, 100]
                                                    )
         Example-3
         ---------
         gid, value, df_loc = PXGS.gs[8].get_gid_prop_range(PROP_NAME='aspect_ratio',
                                                    range_type='value',
-                                                   rank_range=[2, 2.5]
+                                                   value_range=[2, 2.5]
                                                    )
         '''
-        print(PROP_NAME)
+        gids, A_B_values, A_B_indices = [], [], []
         if PROP_NAME in self.prop.columns:
-            PROPERTY = self.prop[PROP_NAME].replace([-np.inf,
-                                                     np.inf], np.nan).dropna()
+            PROPERTY = self.prop[PROP_NAME].replace([-np.inf, np.inf],
+                                                    np.nan).dropna()
             if range_type in ('percentage', '%',
                               'perc', 'by_percentage',
                               'by_perc', 'by%'
@@ -1491,7 +2761,7 @@ class mcgs2_grain_structure():
                 A_B_indices = A_MAX.index[A_MAX <= uco]
                 A_B_values = A_MAX[A_B_indices].to_numpy()
                 gids = A_B_indices+1
-            elif range_type == ('value', 'by_value'):
+            elif range_type in ('value', 'by_value'):
                 # If the user chooses to use values to describe the range of
                 # objects
                 lco = min(value_range)
@@ -1502,7 +2772,7 @@ class mcgs2_grain_structure():
                 A_B_indices = A_MAX.index[A_MAX <= uco]
                 A_B_values = A_MAX[A_B_indices].to_numpy()
                 gids = A_B_indices+1
-            elif range_type == ('rank', 'by_rank'):
+            elif range_type in ('rank', 'by_rank'):
                 '''
                 # TODO: debug for the case where two entered values are same
                 # TODO: Handle invalud user data
@@ -1532,7 +2802,11 @@ class mcgs2_grain_structure():
         THE GID TO THE USER
 
         """
-        gid = self.prop['area'].idxmax()+1
+        if 'area' in self.prop.columns:
+            gid = self.prop['area'].idxmax()+1
+        else:
+            areas = self.find_grain_size_fast(metric='npixels')
+            gid = 1
         self.g[gid]['grain'].plot()
 
     def plot_longest_grain(self):
@@ -1547,15 +2821,14 @@ class mcgs2_grain_structure():
         # TODO: WRAP THIS INSIDE A FIND_LONGEST_GRAIN AND HAVE IT TRHOW
         THE GID TO THE USER
         """
-        gid, _, _ = self.get_gid_prop_range(PROP_NAME='aspect_ratio',
-                                            range_type='percentage',
-                                            percentage_range=[100, 100],
-                                            )
+        gids, _, _ = self.get_gid_prop_range(PROP_NAME='aspect_ratio',
+                                             range_type='percentage',
+                                             percentage_range=[100, 100],
+                                             )
         # plt.imshow(self.g[gid[0]]['grain'].bbox_ex)
-        for _gid_ in gid:
-            plt.figure()
-            self.g[gid]['grain'].plot()
-            plt.show()
+        self.plot_grains_gids(list(gids))
+        #for _gid_ in gid:
+        #    self.g[_gid_]['grain'].plot()
 
     def mask_lgi_with_gids(self,
                            gids,
@@ -1585,6 +2858,9 @@ class mcgs2_grain_structure():
 
         # -----------------------------------------
         lgi_masked = deepcopy(self.lgi).astype(int)
+        print('========================================')
+        print(gids)
+        print('========================================')
         for gid in gids:
             if gid in self.gid:
                 lgi_masked[lgi_masked == gid] = masker
@@ -1647,14 +2923,59 @@ class mcgs2_grain_structure():
         # -----------------------------------------
         return s_masked, masker
 
-    def plotgs(self, figsize=(6, 6)):
-        plt.figure(figsize=figsize)
-        plt.imshow(self.s)
-        plt.title(f"tslice={self.m}")
-        plt.xlabel(r"X-axis, $\mu m$", fontsize=12)
-        plt.ylabel(r"Y-axis, $\mu m$", fontsize=12)
+    def plotgs(self, figsize=(6, 6), dpi=120,
+               custom_lgi=None,
+               cmap='coolwarm', plot_cbar=True,
+               title='Title',
+               plot_centroid=False, plot_gid_number=False,
+               centroid_kwargs={'marker': 'o',
+                                'mfc': 'yellow',
+                                'mec': 'black',
+                                'ms': 2.5},
+               gid_text_kwargs={'fontsize': 10},
+               title_kwargs={'fontsize': 10},
+               label_kwargs={'fontsize': 10}
+               ):
+        """
+        from upxo.ggrowth.mcgs import mcgs
+        mcgs = mcgs(study='independent', input_dashboard='input_dashboard.xls')
+        mcgs.simulate()
+        mcgs.detect_grains()
+        mcgs.gs[35].plotgs(figsize=(6, 6), dpi=120, cmap='coolwarm',
+                           plot_centroid=True,
+                           centroid_kwargs={'marker':'o','mfc':'yellow',
+                                            'mec':'black','ms':2.5},
+                           plot_gid_number=True)
+        """
+        plt.figure(figsize=figsize, dpi=dpi)
+        if custom_lgi is None:
+            LGI = self.lgi
+        else:
+            LGI = custom_lgi
+        plt.imshow(LGI, cmap=cmap)
+        if plot_centroid or plot_gid_number:
+            centroid_x, centroid_y = [], []
+            for gid in self.gid:
+                centroid_x.append(self.xgr[self.lgi == gid].mean())
+                centroid_y.append(self.ygr[self.lgi == gid].mean())
+        if plot_centroid:
+            plt.plot(centroid_x, centroid_y, linestyle='None',
+                     marker=centroid_kwargs['marker'],
+                     mfc=centroid_kwargs['mfc'], mec=centroid_kwargs['mec'],
+                     ms=centroid_kwargs['ms'])
+        if plot_gid_number:
+            for i, (cenx, ceny) in enumerate(zip(centroid_x, centroid_y), start=1):
+                plt.text(cenx, ceny, str(i),
+                         fontsize=gid_text_kwargs['fontsize'])
+        plt.xlabel(r"X-axis, $\mu m$", fontsize=label_kwargs['fontsize'])
+        plt.ylabel(r"Y-axis, $\mu m$", fontsize=label_kwargs['fontsize'])
+        plt.title(f'tslice={self.m}. {title}')
+        if plot_cbar:
+            plt.colorbar()
 
-    def plot_grains_gids(self, gids, gclr='color', title="user grains",
+    def plot_grains_gids(self, gids,
+                         gclr='color',
+                         title="user grains",
                          cmap_name='CMRmap_r', ):
         """
 
@@ -1689,6 +3010,8 @@ class mcgs2_grain_structure():
 
             PXGS.gs[8].plot_grains_gids(gid, cmap_name='CMRmap_r')
         """
+        if not dth.IS_ITER(gids):
+            gids = [gids]
         if gclr not in ('binary', 'grayscale'):
             s, _ = self.mask_s_with_gids(gids)
             plt.imshow(s, cmap=cmap_name, vmin=1)
@@ -1831,7 +3154,6 @@ class mcgs2_grain_structure():
              ):
         '''
         if no kwargs: plot the entire greain structure: just use plotgs()
-
         '''
         if not PROP_NAME:
             plt.imshow(self.s, cmap=cmap)
@@ -2180,12 +3502,12 @@ class mcgs2_grain_structure():
         Use saa=False and throw=True to only return mesh
         '''
         # from mcgs import _uidata_mcgs_gridding_definitions_
-        # uigrid = _uidata_mcgs_gridding_definitions_(self.__ui)
+        # uigrid = _uidata_mcgs_gridding_definitions_(self.uinputs)
         # from mcgs import _uidata_mcgs_mesh_
-        # uimesh = _uidata_mcgs_mesh_(self.__ui)
+        # uimesh = _uidata_mcgs_mesh_(self.uinputs)
 
         if saa:
-            self.mesh = mesh_mcgs2d(self.__ui['uimesh'],
+            self.mesh = mesh_mcgs2d(self.uinputs['uimesh'],
                                     self.uigrid,
                                     self.dim,
                                     self.m,
@@ -2194,7 +3516,7 @@ class mcgs2_grain_structure():
                 return self.mesh
         if not saa:
             if throw:
-                return mesh_mcgs2d(self.__ui['uimesh'],
+                return mesh_mcgs2d(self.uinputs['uimesh'],
                                    self.uigrid,
                                    self.dim,
                                    self.m,
@@ -2218,8 +3540,11 @@ class mcgs2_grain_structure():
 
     @property
     def centroids(self):
-        return [grain.centroid for grain in self]
-
+        centroids = []
+        for gid in self.gid:
+            locs = self.lgi == gid
+            centroids.append([self.xgr[locs].mean(), self.ygr[locs].mean()])
+        return np.array(centroids)
     # --------------------------------------------------------------------
     @property
     def bboxes(self):
@@ -2493,35 +3818,56 @@ class mcgs2_grain_structure():
     def export_vtk2d(self):
         pass
 
-    def export_ctf(self, folder, fileName):
-        '''
-        ctf.export_ctf('D:\export_folder', 'sunil')
-        '''
+    def export_ctf(self, folder, fileName, factor=1, method='nearest'):
+        """
+        ctf.export_ctf('D:/export_folder', 'sunil')
+
+        CODES before the modication:
+
+            from upxo._sup.export_data import ctf
+            ctf = ctf()
+            ctf.load_header_file()
+            ctf.make_header_from_lines()
+            ctf.set_phase_name(phase_name='PHNAME')
+            # ------------------------------------
+            ctf.set_grid(self.xgr, self.ygr)
+            ctf.set_state(self.S, self.s)
+            # ------------------------------------
+            '''UPDATE TO BE MADE ASAP.'''
+            # ctf.set_ori(self.euler1, self.euler2, self.euler3)
+            ctf.set_grid_data()
+            # ndata = ctf.assemble_grid_data()
+            # ndata = ctf.assemble_grid_data_orix()
+            ctf.write_ctf_file_ORIX(folder, fileName)
+        """
+        if method not in ('nearest', 'decimate'):
+            raise ValueError('Invalid method provided. Valid: nearest or decimate')
         from upxo._sup.export_data import ctf
         ctf = ctf()
         ctf.load_header_file()
         ctf.make_header_from_lines()
         ctf.set_phase_name(phase_name='PHNAME')
-        ctf.set_grid(self.xgr, self.ygr)
-        ctf.set_state(self.S, self.s)
+        # ------------------------------------
+        if factor > 0.0 and factor < 1.0:
+            XGRID, YGRID, SMATRIX = decrease_grid_resolution(self.xgr, self.ygr, self.s, factor)
+        elif factor == 1.0:
+            XGRID, YGRID, SMATRIX = self.xgr, self.ygr, self.s
+        elif factor > 1.0:
+            XGRID, YGRID, SMATRIX = increase_grid_resolution(self.xgr, self.ygr, self.s, factor)
+        # ------------------------------------
+        ctf.set_grid(XGRID, YGRID)
+        ctf.set_state(self.S, SMATRIX)
+        """UPDATE TO BE MADE ASAP."""
+        # ctf.set_ori(self.euler1, self.euler2, self.euler3)
         ctf.set_grid_data()
-        ndata = ctf.assemble_grid_data()
-        ctf.write_ctf_file(folder, fileName)
+        # ndata = ctf.assemble_grid_data()
+        # ndata = ctf.assemble_grid_data_orix()
+        ctf.write_ctf_file_ORIX(folder, fileName)
 
-
-    def export_slices(self,
-                      xboundPer,
-                      yboundPer,
-                      zboundPer,
-                      mlist,
-                      sliceStepSize,
-                      sliceNormal,
-                      xoriConsideration,
-                      resolution_factor,
-                      exportDir,
-                      fileFormats,
-                      overwrite,
-                      ):
+    def export_slices(self, xboundPer=None, yboundPer=None, zboundPer=None,
+                      mlist=None, sliceStepSize=None, sliceNormal=None,
+                      xoriConsideration=None, resolution_factor=None,
+                      exportDir=None, fileFormats=None, overwrite=None, ):
         """
         Exports datafiles of slices through the grain structures.
 

@@ -1,17 +1,3 @@
-'''
-This module has the following collection of edge classes:
-    * INSTANCES
-    2d1.
-    2d2.
-    2d3.
-    3d1.
-    3d2.
-This is a core UPXO module
-NOTE: NOT TO BE SHARED WITH ANYONE OTHER THAN:
-    *@UKAEA: Dr. Vaasu Anandatheertha, Dr. Chris Hardie, Dr. Vikram Phalke
-    *@UKAEA:  Dr. Ben Poole, Dr. Allan Harte, Dr. Cori Hamelin
-    *@OX,UKAEA:  Dr. Eralp Demir, Dr. Ed Tarleton
-'''
 #//////////////////////////////////////////////////////////////////////////////
 # Script information for the file.
 __name__ = "UPXO: UKAEA Poly-XTAL Operations"
