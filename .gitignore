@@ -1,0 +1,14 @@
+*.obj
+*.vtk
+*.vti
+*.docx
+*.xlsx
+*.pptx
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+*.pyo
+__pycache__/
+*.pyc
+*.pyo
