@@ -1,4 +1,4 @@
-def mc_iterations_3d_alg310(self):
+def mc_iterations_3d_alg300(self):
     """
 
 
@@ -18,6 +18,37 @@ def mc_iterations_3d_alg310(self):
     S_sz0, S_sz1, S_sz2 = self.S.shape[0], self.S.shape[1], self.S.shape[2]
     S_sz0_list, S_sz1_list = list(range(S_sz0)), list(range(S_sz1))
     S_sz2_list = list(range(S_sz2))
+    # --------------------------------------
+    if self.uisim.NL == 1:
+        NLM_000 = self.NLM_nd[0, 0, 0]
+        NLM_001 = self.NLM_nd[0, 0, 1]
+        NLM_002 = self.NLM_nd[0, 0, 2]
+        NLM_010 = self.NLM_nd[0, 1, 0]
+        NLM_011 = self.NLM_nd[0, 1, 1]
+        NLM_012 = self.NLM_nd[0, 1, 2]
+        NLM_020 = self.NLM_nd[0, 2, 0]
+        NLM_021 = self.NLM_nd[0, 2, 1]
+        NLM_022 = self.NLM_nd[0, 2, 2]
+
+        NLM_100 = self.NLM_nd[1, 0, 0]
+        NLM_101 = self.NLM_nd[1, 0, 1]
+        NLM_102 = self.NLM_nd[1, 0, 2]
+        NLM_110 = self.NLM_nd[1, 1, 0]
+        # NLM_111 = self.NLM_nd[1, 1, 1]
+        NLM_112 = self.NLM_nd[1, 1, 2]
+        NLM_120 = self.NLM_nd[1, 2, 0]
+        NLM_121 = self.NLM_nd[1, 2, 1]
+        NLM_122 = self.NLM_nd[1, 2, 2]
+
+        NLM_200 = self.NLM_nd[2, 0, 0]
+        NLM_201 = self.NLM_nd[2, 0, 1]
+        NLM_202 = self.NLM_nd[2, 0, 2]
+        NLM_210 = self.NLM_nd[2, 1, 0]
+        NLM_211 = self.NLM_nd[2, 1, 1]
+        NLM_212 = self.NLM_nd[2, 1, 2]
+        NLM_220 = self.NLM_nd[2, 2, 0]
+        NLM_221 = self.NLM_nd[2, 2, 1]
+        NLM_222 = self.NLM_nd[2, 2, 2]
     # --------------------------------------
     xinda = self.xinda
     yinda = self.yinda
@@ -129,32 +160,32 @@ def mc_iterations_3d_alg310(self):
                                     ssub_210, ssub_211, ssub_212,
                                     ssub_220, ssub_221, ssub_222]
                         if min(Neigh) != max(Neigh):
-                            DelH1 = float(ssub_111_a == ssub_000) + \
-                                float(ssub_111_a == ssub_001) + \
-                                float(ssub_111_a == ssub_002) + \
-                                float(ssub_111_a == ssub_010) + \
-                                float(ssub_111_a == ssub_011) + \
-                                float(ssub_111_a == ssub_012) + \
-                                float(ssub_111_a == ssub_020) + \
-                                float(ssub_111_a == ssub_021) + \
-                                float(ssub_111_a == ssub_022) + \
-                                float(ssub_111_a == ssub_100) + \
-                                float(ssub_111_a == ssub_101) + \
-                                float(ssub_111_a == ssub_102) + \
-                                float(ssub_111_a == ssub_110) + \
-                                float(ssub_111_a == ssub_112) + \
-                                float(ssub_111_a == ssub_120) + \
-                                float(ssub_111_a == ssub_121) + \
-                                float(ssub_111_a == ssub_122) + \
-                                float(ssub_111_a == ssub_200) + \
-                                float(ssub_111_a == ssub_201) + \
-                                float(ssub_111_a == ssub_202) + \
-                                float(ssub_111_a == ssub_210) + \
-                                float(ssub_111_a == ssub_211) + \
-                                float(ssub_111_a == ssub_212) + \
-                                float(ssub_111_a == ssub_220) + \
-                                float(ssub_111_a == ssub_221) + \
-                                float(ssub_111_a == ssub_222)
+                            DelH1 = NLM_000 * float(ssub_111_a == ssub_000) + \
+                                NLM_001 * float(ssub_111_a == ssub_001) + \
+                                NLM_002 * float(ssub_111_a == ssub_002) + \
+                                NLM_010 * float(ssub_111_a == ssub_010) + \
+                                NLM_011 * float(ssub_111_a == ssub_011) + \
+                                NLM_012 * float(ssub_111_a == ssub_012) + \
+                                NLM_020 * float(ssub_111_a == ssub_020) + \
+                                NLM_021 * float(ssub_111_a == ssub_021) + \
+                                NLM_022 * float(ssub_111_a == ssub_022) + \
+                                NLM_100 * float(ssub_111_a == ssub_100) + \
+                                NLM_101 * float(ssub_111_a == ssub_101) + \
+                                NLM_102 * float(ssub_111_a == ssub_102) + \
+                                NLM_110 * float(ssub_111_a == ssub_110) + \
+                                NLM_112 * float(ssub_111_a == ssub_112) + \
+                                NLM_120 * float(ssub_111_a == ssub_120) + \
+                                NLM_121 * float(ssub_111_a == ssub_121) + \
+                                NLM_122 * float(ssub_111_a == ssub_122) + \
+                                NLM_200 * float(ssub_111_a == ssub_200) + \
+                                NLM_201 * float(ssub_111_a == ssub_201) + \
+                                NLM_202 * float(ssub_111_a == ssub_202) + \
+                                NLM_210 * float(ssub_111_a == ssub_210) + \
+                                NLM_211 * float(ssub_111_a == ssub_211) + \
+                                NLM_212 * float(ssub_111_a == ssub_212) + \
+                                NLM_220 * float(ssub_111_a == ssub_220) + \
+                                NLM_221 * float(ssub_111_a == ssub_221) + \
+                                NLM_222 * float(ssub_111_a == ssub_222)
                             # ---------------------------------------------
                             # If the sampling is to be selected without weightage to dominant neighbour state, then:
                             Neigh = list(set([x for x in Neigh if x != ssub_111_a]))
@@ -162,32 +193,32 @@ def mc_iterations_3d_alg310(self):
                             # Neigh = [x for x in Neigh if x != ssub_111_a]
                             # ---------------------------------------------
                             ssub_111_b = sample_rand(Neigh, 1)[0]
-                            DelH2 = float(ssub_111_b == ssub_000) + \
-                                float(ssub_111_b == ssub_001) + \
-                                float(ssub_111_b == ssub_002) + \
-                                float(ssub_111_b == ssub_010) + \
-                                float(ssub_111_b == ssub_011) + \
-                                float(ssub_111_b == ssub_012) + \
-                                float(ssub_111_b == ssub_020) + \
-                                float(ssub_111_b == ssub_021) + \
-                                float(ssub_111_b == ssub_022) + \
-                                float(ssub_111_b == ssub_100) + \
-                                float(ssub_111_b == ssub_101) + \
-                                float(ssub_111_b == ssub_102) + \
-                                float(ssub_111_b == ssub_110) + \
-                                float(ssub_111_b == ssub_112) + \
-                                float(ssub_111_b == ssub_120) + \
-                                float(ssub_111_b == ssub_121) + \
-                                float(ssub_111_b == ssub_122) + \
-                                float(ssub_111_b == ssub_200) + \
-                                float(ssub_111_b == ssub_201) + \
-                                float(ssub_111_b == ssub_202) + \
-                                float(ssub_111_b == ssub_210) + \
-                                float(ssub_111_b == ssub_211) + \
-                                float(ssub_111_b == ssub_212) + \
-                                float(ssub_111_b == ssub_220) + \
-                                float(ssub_111_b == ssub_221) + \
-                                float(ssub_111_b == ssub_222)
+                            DelH2 = NLM_000 * float(ssub_111_b == ssub_000) + \
+                                NLM_001 * float(ssub_111_b == ssub_001) + \
+                                NLM_002 * float(ssub_111_b == ssub_002) + \
+                                NLM_010 * float(ssub_111_b == ssub_010) + \
+                                NLM_011 * float(ssub_111_b == ssub_011) + \
+                                NLM_012 * float(ssub_111_b == ssub_012) + \
+                                NLM_020 * float(ssub_111_b == ssub_020) + \
+                                NLM_021 * float(ssub_111_b == ssub_021) + \
+                                NLM_022 * float(ssub_111_b == ssub_022) + \
+                                NLM_100 * float(ssub_111_b == ssub_100) + \
+                                NLM_101 * float(ssub_111_b == ssub_101) + \
+                                NLM_102 * float(ssub_111_b == ssub_102) + \
+                                NLM_110 * float(ssub_111_b == ssub_110) + \
+                                NLM_112 * float(ssub_111_b == ssub_112) + \
+                                NLM_120 * float(ssub_111_b == ssub_120) + \
+                                NLM_121 * float(ssub_111_b == ssub_121) + \
+                                NLM_122 * float(ssub_111_b == ssub_122) + \
+                                NLM_200 * float(ssub_111_b == ssub_200) + \
+                                NLM_201 * float(ssub_111_b == ssub_201) + \
+                                NLM_202 * float(ssub_111_b == ssub_202) + \
+                                NLM_210 * float(ssub_111_b == ssub_210) + \
+                                NLM_211 * float(ssub_111_b == ssub_211) + \
+                                NLM_212 * float(ssub_111_b == ssub_212) + \
+                                NLM_220 * float(ssub_111_b == ssub_220) + \
+                                NLM_221 * float(ssub_111_b == ssub_221) + \
+                                NLM_222 * float(ssub_111_b == ssub_222)
                             if DelH2 >= DelH1:
                                 # S[P, R, C] = ssub_111_b
                                 _p = zinda[P+1, R+1, C+1]
@@ -197,18 +228,16 @@ def mc_iterations_3d_alg310(self):
                             elif self.uisim.consider_boltzmann_probability:
                                 if self.uisim.s_boltz_prob[int(ssub_111_b-1)] < rand.random():
                                     self.S[P, R, C] = ssub_111_b
-                if self.display_messages:
-                    if m % self.uiint.mcint_promt_display == 0:
-                        print("Annealing step no.", m, "Kernel core in slice. ", P, "/", S_sz2)
+        if self.display_messages:
+            if m % self.uiint.mcint_promt_display == 0:
+                print("Annealing step no.", m)
         cond_1 = m % self.uiint.mcint_save_at_mcstep_interval == 0.0
         if cond_1 or fully_annealed:
-
             # self.tslices.append(m)
             # Create and add grain structure data structure template
             self.add_gs_data_structure_template(m=m,
                                                 dim=self.uigrid.dim)
             self.gs[m].s = deepcopy(self.S)
-            self.gs[m]
             if self.display_messages:
                 print(f'State updated @ mc step {m}')
             print('__________________________')
