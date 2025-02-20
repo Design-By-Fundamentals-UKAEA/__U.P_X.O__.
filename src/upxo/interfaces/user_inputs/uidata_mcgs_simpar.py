@@ -99,9 +99,9 @@ class _uidata_mcgs_simpar_:
     def set_algorithm_hopping(self, uidata):
         self.mcsteps = int(uidata['mcsteps'])
         self.mcstep_hops = []
-        self.mcalg = str(int(uidata['mcalg']))
+        self.mcalg = str(uidata['mcalg'])
         self.algo_hop = True
-        self.algo_hops = ((str(int(uidata['mcalg'])),
+        self.algo_hops = ((str(uidata['mcalg']),
                            100
                            ),
                           )

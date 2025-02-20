@@ -84,7 +84,6 @@ class _uidata_mcgs_gridding_definitions_:
         retstr += _ + f"{colored('TRANSFORMATION', 'red', attrs=['bold'])}: {colored(self.transformation, 'cyan')}"
         return retstr
 
-
     @property
     def xbound(self):
         """
