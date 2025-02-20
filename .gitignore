@@ -4,6 +4,7 @@
 *.docx
 *.xlsx
 *.pptx
+*.msh
 
 # Ignore Python cache files
 __pycache__/
