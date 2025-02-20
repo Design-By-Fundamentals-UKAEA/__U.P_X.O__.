@@ -11,99 +11,65 @@ from upxo.ggrowth.mcgs import mcgs
 pxt = mcgs()
 pxt.simulate()
 pxt.detect_grains()
-tslice = 8  # Temporal slice number
+tslice = 20  # Temporal slice number
 pxt.char_morph_2d(tslice)
+# pxt.gs[tslice].plotgs()
+pxt.gs[tslice].neigh_gid
+
+#pxt.gs[tslice].plot()
+
 hgrid = pxt.gs[tslice].xgr
 vgrid = pxt.gs[tslice].ygr
 mcstates = pxt.gs[tslice].s
 nstates = pxt.uisim.S
 
-
-pxt.gs[8].g[1]['grain']
-
-
 # pxt.gs[tslice].scale(sf=2)
 pxt.gs[tslice].export_ctf(r'D:\export_folder', 'sunil')
 pxt.gs[tslice].find_grain_boundary_junction_points()
 # -----------------------------
-#plt.figure()
-#plt.imshow(pxt.gs[tslice].lgi)
-#for r, c in zip(np.where(pxt.gs[tslice].gbjp)[0],
-#                np.where(pxt.gs[tslice].gbjp)[1]):
-#	plt.plot(c, r, 'k.')
+'''
+plt.figure()
+plt.imshow(pxt.gs[tslice].lgi)
+for r, c in zip(np.where(pxt.gs[tslice].gbjp)[0],
+                np.where(pxt.gs[tslice].gbjp)[1]):
+    plt.plot(c, r, 'k.')
+'''
 # =====================================================================
-pxt.gs[tslice].xomap_set(map_type='ebsd',
-                         path=r"D:/export_folder/",
-                         file_name_with_ext=r"sunil.ctf")
+fileName = r'D:\export_folder\sunil'
+pxt.gs[tslice].xomap_set(path_filename_noext=fileName)
 
+pxt.gs[tslice].xomap.map
 pxt.gs[tslice].xomap_prepare()
 pxt.gs[tslice].xomap_extract_features()
 
 pxt.gs[tslice].find_grain_boundary_junction_points(xorimap=True)
 pxt.gs[tslice].xomap.gbjp
-
-# ---------------------------------
-# TEST SCRIPTS TO TEST EQAUALITY OF GRAIN ARTEAS
-# TEST - 1: test against upxo grains
-samples = [pxt.gs[8].g[i]['grain'] for i in pxt.gs[8].g.keys()]
-[_.npixels for _ in samples]
-upxo_sample = samples[0]
-upxo_sample == samples
-upxo_sample != samples
-upxo_sample < samples
-upxo_sample <= samples
-upxo_sample > samples
-upxo_sample >= samples
-# TEST - 2: test against numbers
-upxo_sample == [16, 17, 8, 16, 2]
-upxo_sample != [16, 17, 8, 16, 2]
-# TEST - 3: test against defDap grains
-samples = pxt.gs[tslice].xomap.map.grainList
-[len(_.coordList) for _ in samples]
-upxo_sample == samples
-upxo_sample != samples
-# ---------------------------------
-
-pxt.gs[tslice].xomap.map.grains
+# =====================================================================
+# plt.imshow(pxt.gs[tslice].lgi)
+# plt.imshow(pxt.gs[tslice].xomap.map.grains)
+# pxt.gs[tslice].xomap_plot_ea()
+# pxt.gs[tslice].xomap_plotIPFMap([1, 0, 0])
 pxt.gs[tslice].xomap.map.eulerAngleArray
 pxt.gs[tslice].xomap.map.quatArray
 pxt.gs[tslice].xomap.map.grainList[0].coordList
+# =====================================================================
 # Above is equivalent to:
 # COde here
+'''
 plt.figure()
 plt.imshow(pxt.gs[tslice].xomap.map.grains)
 for r, c in zip(np.where(pxt.gs[tslice].xomap.gbjp)[0],
                 np.where(pxt.gs[tslice].xomap.gbjp)[1]):
 	plt.plot(c, r, 'k.')
+'''
 # =====================================================================
 #    INTEGRATION SUCCESSFULL TILL HERE:  "MCGS2_TEMPORAL_SLICE.PY"
 # =====================================================================
-from upxo.interfaces.defdap.importebsd import ebsd_data as ebsd
-fileName = r"C:\Development\M2MatMod\upxo_packaged\upxo_private\src\upxo\_written_data\_ctf_export_2dmcgs\sunil"
-fileName = r"D:\export_folder\sunil"
-# fileName = r"C:\Development\M2MatMod\mtex\EBSD_scan_data\map"
-gs = ebsd(fileName)
-# gs.map.filterData(misOriTol=5) # Kuwahara filter
-gs.map.buildQuatArray()
-gs.map.findBoundaries(boundDef=10)
-gs.map.findGrains(minGrainSize=1)
-# gs.map.plotGrainMap()
-# gs.map.plotBoundaryMap()
-# gs.map.plotPhaseMap()
-# gs.map.plotBandContrastMap()
-# gs.map.plotEulerMap()
-gs.map.buildNeighbourNetwork()
-gs.map.findBoundaries()
-# # DATA in DefDAP:
-gs.map.grains # ---- > Equivalent to pxt.gs[8].lgi
-gs.map.quatArray
-gs.map.eulerAngleArray
-# ACCESS GRAINS:
-gs.map.grainList[0].coordList
-# =====================================================================
 # FIND JUNCTION POINTS:
-
 gids = np.unique(pxt.gs[tslice].xomap.map.grains)
+
+pxt.gs[tslice].gid
+
 BJP = {gid: None for gid in gids}  # Boundary Junction Points
 for gid in gids:
 	BJP[gid] = np.argwhere(pxt.gs[tslice].xomap.gbjp*(pxt.gs[tslice].xomap.map.grains==gid))
@@ -123,16 +89,16 @@ grain_neighbors = {gid: None for gid in gids}
 struct = generate_binary_structure(2, 1)  # 2D connectivity, direct neighbors
 for gid in gids:
     # Create a binary mask for the current grain
-    mask = gs.map.grains == gid
+    mask = pxt.gs[tslice].xomap.map.grains == gid
     # Dilate the mask to include borders with neighbors
     dilated_mask = binary_dilation(mask, structure=struct)
     # Find unique neighboring grain IDs in the dilated area, excluding the current grain ID
-    neighbors = np.unique(gs.map.grains[dilated_mask & ~mask])
+    neighbors = np.unique(pxt.gs[tslice].xomap.map.grains[dilated_mask & ~mask])
     # Update the dictionary, excluding the current grain ID from its neighbors if present
     grain_neighbors[gid] = list(set(neighbors) - {gid})
 # =====================================================================
 # CALCULATE GRAIN AREAS
-areas = np.array([len(gs.map.grainList[gid-1].coordList) for gid in gids])
+areas = np.array([len(pxt.gs[tslice].xomap.map.grainList[gid-1].coordList) for gid in gids])
 # FIND OUIT  GRAIN OF INTEREST, WHCH IS THE LARGEST GRAIN
 GOI_amax = int(np.argwhere(areas == areas.max()).squeeze())
 GOI = GOI_amax
@@ -149,11 +115,11 @@ gbseg = {gid: {} for gid in gids}
 struct = generate_binary_structure(2, 1)  # 2D connectivity, direct neighbors
 for gid in gids:
     # Binary mask for the current grain
-    gid_mask = gs.map.grains == gid
+    gid_mask = pxt.gs[tslice].xomap.map.grains == gid
 
     for neigh in grain_neighbors[gid]:
         # Binary mask for the neighbor
-        neigh_mask = gs.map.grains == neigh
+        neigh_mask = pxt.gs[tslice].xomap.map.grains == neigh
         # Dilate each mask
         dilated_gid_mask = binary_dilation(gid_mask, structure=struct)
         dilated_neigh_mask = binary_dilation(neigh_mask, structure=struct)
@@ -165,28 +131,27 @@ for gid in gids:
         gbseg[gid][neigh] = list(zip(boundary_gid_to_neigh[0], boundary_gid_to_neigh[1]))
 
 # Plot to validate
-A = deepcopy(gs.map.grains)
-locs = gs.map.grainList[GOI].coordList
-centroid = np.array(locs).T.sum(axis=1)/len(locs)
+A = deepcopy(pxt.gs[tslice].xomap.map.grains)
+locs = pxt.gs[tslice].xomap.map.grainList[GOI].coordList
 _ = A==GOI+1  # Mask of largest grain
 _ = np.logical_or(_, A==grain_neighbors[GOI+1][0])
 if len(grain_neighbors[GOI+1])>1:
 	for neigh in grain_neighbors[GOI+1][1:]:
 		_ = np.logical_or(_, A==neigh)
+NEIGHBOURHOOD = pxt.gs[tslice].xomap.map.grains*_
 
-NEIGHBOURHOOD = gs.map.grains*_
-
+centroid = np.array(locs).T.sum(axis=1)/len(locs)
 plt.imshow(NEIGHBOURHOOD)
 plt.plot(centroid[0], centroid[1], 'ks', ms=8, mfc='black')
 for neigh in gbseg[GOI+1]:
 	locs = np.array(gbseg[GOI+1][neigh]).T
 	plt.plot(locs[1], locs[0], 'r.')
 # =====================================================================
-binary_image = np.where(gs.map.grains == GOI+1, 255, 0).astype(np.uint8)
+binary_image = np.where(pxt.gs[tslice].xomap.map.grains == GOI+1, 255, 0).astype(np.uint8)
 contours, __ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 gb_points = contours[0].T.squeeze()
 
-plt.imshow(gs.map.grains*_)
+plt.imshow(pxt.gs[tslice].xomap.map.grains*_)
 plt.plot(centroid[0], centroid[1], 'ks', ms=8, mfc='black')
 for neigh in gbseg[GOI+1]:
 	locs = np.array(gbseg[GOI+1][neigh]).T
@@ -210,7 +175,7 @@ def inout_line(xstart, ystart, xend, yend, x1, y1, tolerance=1e-6):
     return abs((d1 + d2) - d_line) < tolerance and d1 < d_line and d2 < d_line, d1
 # =====================================================================
 # =====================================================================
-locs = gs.map.grainList[GOI-1].coordList
+locs = pxt.gs[tslice].xomap.map.grainList[GOI-1].coordList
 locs_extra = [point for point in locs if point not in gb_points_list]
 segments = [[gbp] for gbp in gb_points_list]
 
@@ -429,7 +394,7 @@ gmsh.model.add("polygon")
 coordinates = list(zip(gbp_listx, gbp_listy))
 # Adding points for polygon vertices
 for i, (x, y) in enumerate(coordinates, start=1):
-    gmsh.model.geo.addPoint(x, y, 0, meshSize=0.1, tag=i)
+    gmsh.model.geo.addPoint(x, y, 0, meshSize=0.5, tag=i)
 # Connecting points with lines
 for i in range(1, len(coordinates)):
     gmsh.model.geo.addLine(i, i+1, tag=i)

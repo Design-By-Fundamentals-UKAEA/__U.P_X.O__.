@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 from itertools import product
 import numpy as np
 
-nx, ny, nz = 25, 25, 25  # Small grid dimensions for demonstration
+nx, ny, nz = 10, 10, 10  # Small grid dimensions for demonstration
 S = 10 # Number of states
 iterations = 100  # Number of iterations
 

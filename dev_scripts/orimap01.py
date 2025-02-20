@@ -48,11 +48,11 @@ ngrains = {'w': round(Vf['w'] * N_GRAINS),
            'c': round(Vf['c'] * N_GRAINS),
            'rand': round(randvf * N_GRAINS)
            }
-
+# Adjust for the residuals by updating ngrains['rand']
 while sum(ngrains.values()) != N_GRAINS:
     if sum(ngrains.values()) < N_GRAINS:
         ngrains['rand'] += 1
-    elif sum(ngrains.values()) < N_GRAINS:
+    else:
         ngrains['rand'] -= 1
 
 '''Find the location (in pandas dataframe) of orientations which satisfy the
@@ -135,16 +135,17 @@ for gid in gids:
     neigh_tc[gid] = tclist
 
 
-neigh_tc = {gid: [gidtc_sorted[gidtc_sorted] for neighgid in neigh_gid[gid]] for gid in gids}
-'''
-NOW WE START THE PROCESS OF OPTIMIZING THE GRAIN ORINTATION ALLOCATION
-'''
 
-def find_max_possible_vf_and_ng(neigh_gid):
+'''.NOW WE START THE PROCESS OF OPTIMIZING THE GRAIN ORINTATION ALLOCATION.'''
 
-    NRUNS = len(neigh_gid)
+
+
+def find_max_possible_vf_and_ng(neigh_gid, NRUNS=None):
+    if not NRUNS:
+        NRUNS = len(neigh_gid)
     ng_max_run = []
     Vf_max_run = []
+    gid_solutions = {run: None for run in range(NRUNS)}
     for run in range(NRUNS):
         print(60*'='+f'\nRun number {run}')
         n_selected_grains = []
@@ -179,6 +180,7 @@ def find_max_possible_vf_and_ng(neigh_gid):
                     print(f"Iteration {i}. Max possible no. of grains = {len(selected_grains)}")
                     print("Maximum possible number of grains - saturation achieved.")
                     print("Iterations stopped")
+                    gid_solutions[run] = selected_grains
                     _ng_ = n_selected_grains[-1]
                     print(f"--Max. num. of non-neigh. grains: {_ng_} out of {len(grain_ids)}")
                     _vf_ = _ng_/len(grain_ids)
@@ -191,10 +193,10 @@ def find_max_possible_vf_and_ng(neigh_gid):
 
     ng_max_run_min = ng_max_run.min()
     ng_max_run_max = ng_max_run.max()
-    ng_max_run_mean = np.round(ng_max_run.mean(), 4)
+    ng_max_run_mean = int(ng_max_run.mean())
     print(60*'+')
+    print('ALL RUNS COMPLETED')
     print(f"Bounds of maximum possible Ng: Min: {ng_max_run_min}, Max: {ng_max_run_max} Mean: {ng_max_run_mean}")
-    print(60*'+')
     Vf_max_run_min = np.round(Vf_max_run.min(), 4)
     Vf_max_run_max = np.round(Vf_max_run.max(), 4)
     Vf_max_run_mean = np.round(Vf_max_run.mean(), 4)
@@ -202,14 +204,120 @@ def find_max_possible_vf_and_ng(neigh_gid):
     print(60*'+')
     ng = [ng_max_run_min, ng_max_run_max, ng_max_run_mean]
     vf = [Vf_max_run_min, Vf_max_run_max, Vf_max_run_mean]
-    return ng, Vf
+    return ng, Vf, gid_solutions
 
-'''Before any orientation mapping even starts, validate the '''
-ng, vf = find_max_possible_vf_and_ng(neigh_gid)
+'''Before any orientation mapping even starts, validate the user provided
+value of texture component volume fraction values'''
+ng, vf, gid_solutions = find_max_possible_vf_and_ng(neigh_gid, NRUNS=100)
 
+for SOLUTION in [1, 4, 7, 99]:
+    plt.figure()
+    pxt.gs[2].plot_grains(gids = gid_solutions[SOLUTION])
 
+pxt.gs[2].plot()
 
 
 print(f"Selected {len(selected_grains)} grains (out of {total_grains}): {selected_grains}")
 
 pxt.gs[2].plot_grains(selected_grains)
+
+
+
+import damask
+import numpy as np
+size = np.ones(3)*1e-5
+cells = [100, 100, 100]
+N_grains = 200
+seeds = damask.seeds.from_random(size, N_grains, cells, True)
+grid = damask.GeomGrid.from_Voronoi_tessellation(cells,size,seeds)
+grid.save(f'Polycystal_{N_grains}_{cells[0]}x{cells[1]}x{cells[2]}')
+grid
+
+
+import damask
+import numpy as np
+size = np.ones(3)*1e-5
+cells = [50, 50, 50]
+N_seeds = 100
+mindistance = min(size)/20
+seeds = damask.seeds.from_Poisson_disc(size, N_seeds, 100, mindistance, False)
+grid = damask.GeomGrid.from_Voronoi_tessellation(cells, size, seeds)
+grid.save(f'Polycystal_{N_seeds}_{cells[0]}x{cells[1]}x{cells[2]}')
+grid
+
+
+
+
+
+
+rng = np.random.default_rng(20191102)
+rnd = damask.Rotation.from_random(100,rng_seed=rng)
+fbr = damask.Rotation.from_fiber_component(crystal=[1, 0],
+                                           sample=[1 , 0],
+                                           sigma=5.0,
+                                           shape=500,
+                                           degrees=True,
+                                           rng_seed=rng)
+
+fbr.as_Euler_angles()
+fbr.average().as_Euler_angles()
+fbr.misorientation(fbr.average()).as_Euler_angles()
+
+
+
+
+
+
+
+
+from orix import data, plot
+from orix.vector import Vector3d
+import numpy as np
+from orix.quaternion import Rotation
+from orix.quaternion import Orientation
+import matplotlib.pyplot as plt
+from orix.crystal_map import Phase
+# from diffpy.structure import Atom, Lattice, Structure
+from diffpy.structure import Lattice, Structure
+from orix.crystal_map import create_coordinate_arrays, CrystalMap, PhaseList
+from orix.quaternion import Rotation
+from orix.io import loadctf
+
+fn = r"D:\export_folder\sunil.ctf"
+upxo_map = loadctf(fn)
+
+
+fbr.quaternion
+
+upxo_map = Rotation(fbr.quaternion)
+
+vec_sample = Vector3d([1, 1, 1])
+
+upxo_map = upxo_map * vec_sample
+
+# Specify a crystal structure and symmetry
+phase = Phase(
+    point_group="6/mmm",
+    structure=Structure(lattice=Lattice(1, 1, 2, 90, 90, 120)),
+)
+
+
+
+fig = plt.figure(figsize=(8, 8))
+ax0 = fig.add_subplot(111, direction=vec_sample, projection="ipf")
+ax0.pole_density_function(Vector3d(upxo_map), log=False, resolution=1, sigma=5)
+ax0.scatter(Vector3d(upxo_map), alpha=1.0)
+
+
+
+
+
+
+
+
+
+sph = damask.Rotation.from_spherical_component(center=damask.Rotation(),
+                                               sigma=7.5,
+                                               shape=3,
+                                               degrees=True,
+                                               rng_seed=rng)

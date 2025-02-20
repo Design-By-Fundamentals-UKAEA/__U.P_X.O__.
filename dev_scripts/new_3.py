@@ -5,7 +5,7 @@ import pyvista as pv
 from skimage.measure import label
 # ====================================================================
 
-nx, ny, nz = 25, 25, 10  # Small grid dimensions for demonstration
+nx, ny, nz = 10, 10, 10  # Small grid dimensions for demonstration
 S = 8 # Number of states
 iterations = 10  # Number of iterations
 
@@ -254,9 +254,3 @@ plotter.show()
 plotter = pv.Plotter()
 plotter.add_mesh(grid, cmap="cividis", show_edges=True)
 plotter.show()
-
-
-
-
-
-

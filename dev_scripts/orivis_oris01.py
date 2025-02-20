@@ -29,10 +29,4 @@ phase = Phase(
 fig = plt.figure(figsize=(8, 8))
 ax0 = fig.add_subplot(111, direction=vec_sample, projection="ipf")
 ax0.pole_density_function(Vector3d(upxo_map), log=False, resolution=1, sigma=10)
-
-
-
-
-fig = plt.figure(figsize=(20, 20))
-ax0 = fig.add_subplot(221, direction=vec_sample, projection="ipf")
-ax0.scatter(Vector3d(upxo_map), alpha=0.5)
+ax0.scatter(Vector3d(upxo_map), alpha=1.0)

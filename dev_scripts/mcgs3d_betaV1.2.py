@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Dec  3 12:54:33 2024
+Created on Mon Nov  4 14:48:12 2024
 
 @author: rg5749
 """
@@ -55,9 +55,9 @@ def monte_carlo_iterations(STRUCTURE, state_matrix, nx, ny, nz, S, iterations):
     return state_matrix
 
 # Parameters
-nx, ny, nz = 250, 250, 1
-S = 16
-iterations = 200
+nx, ny, nz = 100, 100, 1
+S = 4
+iterations = 1000
 
 # Initialize the state matrix
 state_matrix = np.random.randint(1, S + 1, size=(nx, ny, nz))
